@@ -42,6 +42,9 @@ public class Product {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    @Column(name = "is_featured", nullable = false)
+    private Boolean isFeatured;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -63,6 +66,9 @@ public class Product {
         }
         if (isActive == null) {
             isActive = true;
+        }
+        if (isFeatured == null) {
+            isFeatured = false;
         }
         if (stockQuantity == null) {
             stockQuantity = 0;
