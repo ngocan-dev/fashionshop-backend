@@ -21,6 +21,15 @@ public class Category {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Lob
+    private String description;
+
+    @Column(name = "image_url", length = 255)
+    private String imageUrl;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private User createdBy;
@@ -32,6 +41,9 @@ public class Category {
     public void prePersist() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
+        }
+        if (isActive == null) {
+            isActive = true;
         }
     }
 }
