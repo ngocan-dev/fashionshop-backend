@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.payment.service;
 
 import com.example.fashionshop.common.enums.InvoicePaymentStatus;
+import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
@@ -57,6 +58,10 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
         invoice.setPaymentStatus(status == PaymentStatus.PAID ? InvoicePaymentStatus.PAID : InvoicePaymentStatus.PENDING);
         invoiceRepository.save(invoice);
+        if (status == PaymentStatus.PAID) {
+                order.setStatus(OrderStatus.CONFIRMED);
+                orderRepository.save(order);
+        }
 
         return toResponse(saved);
     }
