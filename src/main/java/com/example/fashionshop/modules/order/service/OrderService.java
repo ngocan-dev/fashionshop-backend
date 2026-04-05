@@ -1,6 +1,8 @@
 package com.example.fashionshop.modules.order.service;
 
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
 import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
@@ -24,7 +26,7 @@ public interface OrderService {
 
     OrderDetailResponse getMyOrderDetail(Integer orderId);
 
-    void cancelMyOrder(Integer orderId);
+    CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request);
 
     List<OrderResponse> getAllOrders();
 
