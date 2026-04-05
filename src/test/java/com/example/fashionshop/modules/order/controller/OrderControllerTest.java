@@ -5,6 +5,7 @@ import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderStatusLoadException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
@@ -13,6 +14,9 @@ import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
+import com.example.fashionshop.modules.order.dto.OrderTrackingInfoResponse;
+import com.example.fashionshop.modules.order.dto.OrderTrackingStepResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +37,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -164,6 +169,60 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Unable to load order history"));
+    }
+
+
+    @Test
+    void myOrderStatus_shouldReturnTrackingStatus() throws Exception {
+        OrderStatusTrackingResponse response = OrderStatusTrackingResponse.builder()
+                .summary(OrderSummaryResponse.builder()
+                        .orderId(1001)
+                        .orderCode("INV-AB12CD34")
+                        .orderStatus(OrderStatus.PROCESSING)
+                        .orderDate(LocalDateTime.of(2026, 4, 2, 9, 0))
+                        .build())
+                .tracking(OrderTrackingInfoResponse.builder()
+                        .currentStatus(OrderStatus.PROCESSING)
+                        .progressSteps(List.of(OrderTrackingStepResponse.builder()
+                                .code("processing")
+                                .label("Processing")
+                                .completed(true)
+                                .current(true)
+                                .updatedAt(LocalDateTime.of(2026, 4, 3, 10, 0))
+                                .build()))
+                        .statusHistory(List.of())
+                        .build())
+                .build();
+
+        when(orderService.getMyOrderTrackingStatus(1001)).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/my/1001/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order status fetched successfully"))
+                .andExpect(jsonPath("$.data.summary.orderId").value(1001))
+                .andExpect(jsonPath("$.data.tracking.currentStatus").value("processing"));
+    }
+
+    @Test
+    void myOrderStatus_shouldReturnNotFoundWhenOrderDoesNotExist() throws Exception {
+        when(orderService.getMyOrderTrackingStatus(9999))
+                .thenThrow(new ResourceNotFoundException("Order not found"));
+
+        mockMvc.perform(get("/api/orders/my/9999/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Order not found"));
+    }
+
+    @Test
+    void myOrderStatus_shouldReturnFailureMessageWhenServiceErrors() throws Exception {
+        when(orderService.getMyOrderTrackingStatus(1001)).thenThrow(new OrderStatusLoadException());
+
+        mockMvc.perform(get("/api/orders/my/1001/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load order status"));
     }
 
     @Test
