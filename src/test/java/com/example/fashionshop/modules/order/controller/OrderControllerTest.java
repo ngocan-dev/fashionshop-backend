@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
@@ -13,6 +14,7 @@ import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -212,6 +214,44 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Order status update failed"));
+    }
+
+    @Test
+    void updateCheckoutPaymentMethod_shouldSaveSelectedMethod() throws Exception {
+        CheckoutSummaryResponse response = CheckoutSummaryResponse.builder()
+                .cartId(7)
+                .empty(false)
+                .message("Checkout summary fetched successfully")
+                .availablePaymentMethods(List.of(PaymentMethod.COD, PaymentMethod.BANKING))
+                .selectedPaymentMethod(PaymentMethod.COD)
+                .items(List.of())
+                .totalItems(2)
+                .distinctItemCount(1)
+                .subtotal(new BigDecimal("120.00"))
+                .shippingFee(BigDecimal.ZERO)
+                .discountAmount(BigDecimal.ZERO)
+                .finalTotal(new BigDecimal("120.00"))
+                .build();
+
+        when(orderService.updateCheckoutPaymentMethod(any())).thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/checkout/payment-method")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("paymentMethod", "COD"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Payment method selected successfully"))
+                .andExpect(jsonPath("$.data.selectedPaymentMethod").value("COD"));
+    }
+
+    @Test
+    void updateCheckoutPaymentMethod_shouldReturnValidationMessageWhenMissingPaymentMethod() throws Exception {
+        mockMvc.perform(patch("/api/orders/checkout/payment-method")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Please fill in all required fields"));
     }
 
     @Test

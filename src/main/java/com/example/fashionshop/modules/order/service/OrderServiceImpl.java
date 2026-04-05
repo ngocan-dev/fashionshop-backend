@@ -11,6 +11,7 @@ import com.example.fashionshop.common.exception.OrderListLoadException;
 import com.example.fashionshop.common.exception.OrderPlacementException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.common.mapper.OrderMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -31,6 +32,7 @@ import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
+import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.entity.Order;
@@ -71,6 +73,10 @@ public class OrderServiceImpl implements OrderService {
     private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final BigDecimal DEFAULT_SHIPPING_FEE = ZERO;
     private static final BigDecimal DEFAULT_DISCOUNT = ZERO;
+    private static final List<PaymentMethod> CHECKOUT_PAYMENT_METHODS = List.of(
+            PaymentMethod.COD,
+            PaymentMethod.BANKING
+    );
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS =
             buildAllowedTransitions();
@@ -105,7 +111,8 @@ public class OrderServiceImpl implements OrderService {
                     .customerName(user.getFullName())
                     .customerPhone(user.getPhoneNumber())
                     .suggestedShippingAddress(user.getAddress())
-                    .availablePaymentMethods(List.of(PaymentMethod.values()))
+                    .availablePaymentMethods(CHECKOUT_PAYMENT_METHODS)
+                    .selectedPaymentMethod(null)
                     .items(List.of())
                     .totalItems(0)
                     .distinctItemCount(0)
@@ -125,7 +132,8 @@ public class OrderServiceImpl implements OrderService {
                     .customerName(user.getFullName())
                     .customerPhone(user.getPhoneNumber())
                     .suggestedShippingAddress(user.getAddress())
-                    .availablePaymentMethods(List.of(PaymentMethod.values()))
+                    .availablePaymentMethods(CHECKOUT_PAYMENT_METHODS)
+                    .selectedPaymentMethod(resolveCheckoutPaymentMethod(cart))
                     .items(List.of())
                     .totalItems(0)
                     .distinctItemCount(0)
@@ -155,7 +163,8 @@ public class OrderServiceImpl implements OrderService {
                 .customerName(user.getFullName())
                 .customerPhone(user.getPhoneNumber())
                 .suggestedShippingAddress(user.getAddress())
-                .availablePaymentMethods(List.of(PaymentMethod.values()))
+                .availablePaymentMethods(CHECKOUT_PAYMENT_METHODS)
+                .selectedPaymentMethod(resolveCheckoutPaymentMethod(cart))
                 .items(items)
                 .totalItems(totalItems)
                 .distinctItemCount(items.size())
@@ -164,6 +173,33 @@ public class OrderServiceImpl implements OrderService {
                 .discountAmount(DEFAULT_DISCOUNT)
                 .finalTotal(subtotal.add(DEFAULT_SHIPPING_FEE).subtract(DEFAULT_DISCOUNT))
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CheckoutSummaryResponse updateCheckoutPaymentMethod(UpdateCheckoutPaymentMethodRequest request) {
+        User user = getCurrentUser();
+        Cart cart = cartRepository.findByUser(user)
+                .orElseThrow(() -> new UnauthorizedException("Checkout session expired or order is invalid"));
+
+        List<CartItem> cartItems = cartItemRepository.findByCart(cart);
+        if (cartItems.isEmpty()) {
+            throw new UnauthorizedException("Checkout session expired or order is invalid");
+        }
+
+        PaymentMethod selectedMethod = request != null ? request.getPaymentMethod() : null;
+        if (selectedMethod == null) {
+            throw new BadRequestException("Please select a payment method");
+        }
+
+        if (!CHECKOUT_PAYMENT_METHODS.contains(selectedMethod)) {
+            throw new BadRequestException("Invalid payment method. Allowed values: COD, E-payment");
+        }
+
+        cart.setSelectedPaymentMethod(selectedMethod);
+        cartRepository.save(cart);
+
+        return getCheckoutSummary();
     }
 
     @Override
@@ -179,9 +215,7 @@ public class OrderServiceImpl implements OrderService {
                 throw new BadRequestException("Cart is empty");
             }
 
-            if (request.getPaymentMethod() == null) {
-                throw new BadRequestException("Payment method is required");
-            }
+            PaymentMethod selectedPaymentMethod = resolvePlaceOrderPaymentMethod(request, cart);
 
             BigDecimal subtotal = ZERO;
             List<CartItem> validItems = new ArrayList<>();
@@ -200,7 +234,7 @@ public class OrderServiceImpl implements OrderService {
 
             Order order = orderRepository.save(Order.builder()
                     .user(user)
-                    .status(OrderStatus.PENDING)
+                    .status(selectedPaymentMethod == PaymentMethod.COD ? OrderStatus.CONFIRMED : OrderStatus.PENDING)
                     .totalPrice(finalTotal)
                     .receiverName(request.getReceiverName())
                     .phone(request.getPhone())
@@ -225,7 +259,7 @@ public class OrderServiceImpl implements OrderService {
 
             paymentRepository.save(Payment.builder()
                     .order(order)
-                    .paymentMethod(request.getPaymentMethod())
+                    .paymentMethod(selectedPaymentMethod)
                     .paymentStatus(PaymentStatus.UNPAID)
                     .build());
 
@@ -240,6 +274,8 @@ public class OrderServiceImpl implements OrderService {
             invoiceRepository.save(invoice);
 
             cartItemRepository.deleteByCart(cart);
+            cart.setSelectedPaymentMethod(null);
+            cartRepository.save(cart);
             notificationService.sendOrderNotification(
                     user.getId(),
                     "Order #" + order.getId() + " placed successfully"
@@ -478,6 +514,34 @@ public class OrderServiceImpl implements OrderService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private PaymentMethod resolveCheckoutPaymentMethod(Cart cart) {
+        if (cart == null || cart.getSelectedPaymentMethod() == null) {
+            return null;
+        }
+
+        return CHECKOUT_PAYMENT_METHODS.contains(cart.getSelectedPaymentMethod())
+                ? cart.getSelectedPaymentMethod()
+                : null;
+    }
+
+    private PaymentMethod resolvePlaceOrderPaymentMethod(PlaceOrderRequest request, Cart cart) {
+        PaymentMethod selectedMethod = request.getPaymentMethod();
+
+        if (selectedMethod == null) {
+            selectedMethod = resolveCheckoutPaymentMethod(cart);
+        }
+
+        if (selectedMethod == null) {
+            throw new BadRequestException("Please select a payment method");
+        }
+
+        if (!CHECKOUT_PAYMENT_METHODS.contains(selectedMethod)) {
+            throw new BadRequestException("Invalid payment method. Allowed values: COD, E-payment");
+        }
+
+        return selectedMethod;
     }
 
     private Product validateAndLockProduct(Integer productId) {

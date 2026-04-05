@@ -1,5 +1,6 @@
 package com.example.fashionshop.modules.cart.entity;
 
+import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.modules.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,6 +25,10 @@ public class Cart {
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "selected_payment_method", length = 30)
+    private PaymentMethod selectedPaymentMethod;
 
     @PrePersist
     public void prePersist() {

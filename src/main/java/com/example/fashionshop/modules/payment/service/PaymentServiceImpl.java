@@ -35,35 +35,42 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse processPayment(PaymentRequest request) {
-        User user = getCurrentUser();
-        Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        try {
+            User user = getCurrentUser();
+            Order order = orderRepository.findById(request.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You can only pay your own order");
-        }
+            if (!order.getUser().getId().equals(user.getId())) {
+                throw new BadRequestException("You can only pay your own order");
+            }
 
-        PaymentStatus status = (request.getPaymentMethod() == PaymentMethod.COD)
-                ? PaymentStatus.UNPAID : PaymentStatus.PAID;
+            PaymentStatus status = (request.getPaymentMethod() == PaymentMethod.COD)
+                    ? PaymentStatus.UNPAID : PaymentStatus.PAID;
 
-        Payment payment = Payment.builder()
-                .order(order)
-                .paymentMethod(request.getPaymentMethod())
-                .paymentStatus(status)
-                .paidAt(status == PaymentStatus.PAID ? LocalDateTime.now() : null)
-                .build();
-        Payment saved = paymentRepository.save(payment);
+            Payment payment = Payment.builder()
+                    .order(order)
+                    .paymentMethod(request.getPaymentMethod())
+                    .paymentStatus(status)
+                    .paidAt(status == PaymentStatus.PAID ? LocalDateTime.now() : null)
+                    .build();
+            Payment saved = paymentRepository.save(payment);
 
-        Invoice invoice = invoiceRepository.findByOrder(order)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
-        invoice.setPaymentStatus(status == PaymentStatus.PAID ? InvoicePaymentStatus.PAID : InvoicePaymentStatus.PENDING);
-        invoiceRepository.save(invoice);
-        if (status == PaymentStatus.PAID) {
+            Invoice invoice = invoiceRepository.findByOrder(order)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
+            invoice.setPaymentStatus(status == PaymentStatus.PAID ? InvoicePaymentStatus.PAID : InvoicePaymentStatus.PENDING);
+            invoiceRepository.save(invoice);
+
+            if (request.getPaymentMethod() == PaymentMethod.COD || status == PaymentStatus.PAID) {
                 order.setStatus(OrderStatus.CONFIRMED);
                 orderRepository.save(order);
-        }
+            }
 
-        return toResponse(saved);
+            return toResponse(saved);
+        } catch (BadRequestException | ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BadRequestException("Payment processing failed. Please retry payment");
+        }
     }
 
     @Override
