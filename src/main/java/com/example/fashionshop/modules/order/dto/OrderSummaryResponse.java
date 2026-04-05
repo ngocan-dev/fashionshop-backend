@@ -26,5 +26,6 @@ public class OrderSummaryResponse {
     private BigDecimal totalAmount;
     private Integer itemCount;
     private String shippingStatus;
+    private String detailPath;
     private LocalDateTime updatedAt;
 }

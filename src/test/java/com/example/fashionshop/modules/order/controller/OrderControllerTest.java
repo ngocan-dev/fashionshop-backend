@@ -118,6 +118,7 @@ class OrderControllerTest {
                         .totalAmount(new BigDecimal("320.00"))
                         .itemCount(2)
                         .shippingStatus("PREPARING")
+                        .detailPath("/account/orders/1001")
                         .updatedAt(LocalDateTime.of(2026, 3, 21, 12, 0))
                         .build()))
                 .page(0)
@@ -134,6 +135,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.message").value("Order history fetched successfully"))
                 .andExpect(jsonPath("$.data.items[0].orderId").value(1001))
                 .andExpect(jsonPath("$.data.items[0].totalAmount").value(320.00))
+                .andExpect(jsonPath("$.data.items[0].detailPath").value("/account/orders/1001"))
                 .andExpect(jsonPath("$.data.items[0].orderStatus").value("confirmed"));
     }
 
