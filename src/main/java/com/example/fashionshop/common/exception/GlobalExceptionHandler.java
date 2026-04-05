@@ -41,7 +41,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
     }
 
-    // 🔥 DUY NHẤT 1 handler cho toàn bộ lỗi 500
     @ExceptionHandler({
             HomeDataLoadException.class,
             ProductDetailLoadException.class,
@@ -61,7 +60,8 @@ public class GlobalExceptionHandler {
             CustomerAccountRetrievalException.class,
             AuthenticationSystemException.class,
             OrderCancellationException.class,
-            CartUpdateException.class
+            StoreProductListLoadException.class,
+            CartUpdateException.class,
             SearchResultLoadException.class
     })
     public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
@@ -90,7 +90,9 @@ public class GlobalExceptionHandler {
             return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
         }
 
-        if (errors.size() == 1 && errors.containsKey("quantity") && "Invalid quantity".equals(errors.get("quantity"))) {
+        if (errors.size() == 1
+                && errors.containsKey("quantity")
+                && "Invalid quantity".equals(errors.get("quantity"))) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Invalid quantity"));
         }
 

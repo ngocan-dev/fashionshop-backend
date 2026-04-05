@@ -121,6 +121,30 @@ Dashboard Sidebar
     └── Invoice Detail -> /admin/invoices/:invoiceId
 ```
 
+## Customer Product Browsing (UC-23)
+- **Browse endpoint:** `GET /api/store/products`
+- **Public access:** Yes (no auth required)
+- **Purpose:** Return customer-visible products for storefront browse page in a paginated format.
+- **Query params:**
+  - `page` (default: `0`)
+  - `size` (default: `12`, max: `50`)
+- **Response payload:**
+  - `items[]` with `id`, `name`, `price`, `imageUrl`, `categoryName`, `shortDescription`, `inStock`, `productDetailUrl`
+  - `page`, `size`, `totalItems`, `totalPages`
+- **Typical responses:**
+  - Success with data: message `Products fetched successfully`
+  - Empty list: message `No products available`
+  - Invalid paging: message `Invalid pagination parameters`
+  - Retrieval failure: message `Unable to load products`
+
+Example storefront navigation wiring (frontend):
+```text
+Header
+└── Shop / Browse Products -> /products
+    ├── Product Grid Page calls GET /api/store/products?page=0&size=12
+    └── Product Card click -> /products/:productId
+```
+
 ## Notes
 - API responses follow `{ success, message, data }` format.
 - Passwords are encoded with BCrypt.

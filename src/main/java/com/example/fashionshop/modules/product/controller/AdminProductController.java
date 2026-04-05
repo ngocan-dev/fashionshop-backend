@@ -9,6 +9,7 @@ import com.example.fashionshop.modules.product.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.DeleteMapping;
 
 @RestController
 @RequestMapping("/api/products/manage")
@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 public class AdminProductController {
 
     private final ProductService productService;
-
 
     @GetMapping
     public ApiResponse<PaginationResponse<ProductManageSummaryResponse>> getProductList(
@@ -46,6 +45,8 @@ public class AdminProductController {
     public ApiResponse<Void> deleteProduct(@PathVariable Integer id) {
         productService.delete(id);
         return ApiResponse.success("Product deleted successfully", null);
+    }
+
     @PutMapping("/{id}")
     public ApiResponse<ProductDetailResponse> updateProduct(
             @PathVariable Integer id,

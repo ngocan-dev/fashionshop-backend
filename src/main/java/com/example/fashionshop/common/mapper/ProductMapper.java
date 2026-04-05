@@ -3,6 +3,7 @@ package com.example.fashionshop.common.mapper;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
+import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 
 import java.util.Arrays;
@@ -47,6 +48,26 @@ public final class ProductMapper {
                 .status(active ? "ACTIVE" : "INACTIVE")
                 .thumbnailUrl(getPrimaryImageUrl(product.getImageUrl()))
                 .detailUrl("/api/products/manage/" + product.getId())
+                .build();
+    }
+
+    public static StoreProductSummaryResponse toStoreSummaryResponse(Product product) {
+        String description = product.getDescription();
+        String shortDescription = description == null ? null : description.trim();
+
+        if (shortDescription != null && shortDescription.length() > 120) {
+            shortDescription = shortDescription.substring(0, 117) + "...";
+        }
+
+        return StoreProductSummaryResponse.builder()
+                .id(product.getId())
+                .name(product.getName())
+                .price(product.getPrice())
+                .imageUrl(getPrimaryImageUrl(product.getImageUrl()))
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .shortDescription(shortDescription)
+                .inStock(product.getStockQuantity() != null && product.getStockQuantity() > 0)
+                .productDetailUrl("/products/" + product.getId())
                 .build();
     }
 

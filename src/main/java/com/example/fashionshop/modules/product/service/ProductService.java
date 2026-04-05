@@ -7,6 +7,7 @@ import com.example.fashionshop.modules.product.dto.ProductManageUpdateRequest;
 import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.dto.ProductSearchResponse;
+import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 
 import java.util.List;
 
@@ -26,6 +27,8 @@ public interface ProductService {
     PaginationResponse<ProductManageSummaryResponse> getManageProducts(int page, int size, String keyword);
 
     PaginationResponse<ProductResponse> getProducts(int page, int size, String keyword);
+
+    PaginationResponse<StoreProductSummaryResponse> getStoreProducts(int page, int size);
 
     List<ProductSearchResponse> searchProducts(String keyword);
 }

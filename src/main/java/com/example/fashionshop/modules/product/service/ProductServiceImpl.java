@@ -7,6 +7,7 @@ import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ProductUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.exception.SearchResultLoadException;
+import com.example.fashionshop.common.exception.StoreProductListLoadException;
 import com.example.fashionshop.common.mapper.ProductMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -19,6 +20,7 @@ import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.dto.ProductSearchResponse;
 import com.example.fashionshop.modules.product.dto.ProductStatus;
+import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 import com.example.fashionshop.modules.product.repository.ProductRepository;
 import com.example.fashionshop.modules.user.entity.User;
@@ -29,6 +31,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -36,6 +39,7 @@ import java.util.List;
 @Transactional
 public class ProductServiceImpl implements ProductService {
 
+    private static final int MAX_PAGE_SIZE = 50;
     private static final int SEARCH_LIMIT = 5;
     private static final int DESCRIPTION_SNIPPET_MAX_LENGTH = 120;
 
@@ -155,9 +159,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public PaginationResponse<ProductManageSummaryResponse> getManageProducts(int page, int size, String keyword) {
-        if (page < 0 || size <= 0) {
-            throw new BadRequestException("Invalid pagination parameters");
-        }
+        validatePagination(page, size);
 
         try {
             Page<Product> result = (keyword == null || keyword.isBlank())
@@ -180,6 +182,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public PaginationResponse<ProductResponse> getProducts(int page, int size, String keyword) {
+        validatePagination(page, size);
+
         Page<Product> result = (keyword == null || keyword.isBlank())
                 ? productRepository.findByIsActiveTrue(PageRequest.of(page, size))
                 : productRepository.findByIsActiveTrueAndNameContainingIgnoreCase(keyword, PageRequest.of(page, size));
@@ -194,6 +198,26 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public PaginationResponse<StoreProductSummaryResponse> getStoreProducts(int page, int size) {
+        validatePagination(page, size);
+
+        try {
+            Page<Product> result = productRepository.findByIsActiveTrueOrderByCreatedAtDesc(PageRequest.of(page, size));
+            return PaginationResponse.<StoreProductSummaryResponse>builder()
+                    .items(result.getContent().stream().map(ProductMapper::toStoreSummaryResponse).toList())
+                    .page(result.getNumber())
+                    .size(result.getSize())
+                    .totalItems(result.getTotalElements())
+                    .totalPages(result.getTotalPages())
+                    .build();
+        } catch (BadRequestException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new StoreProductListLoadException();
+        }
+    }
+
+    @Override
     public List<ProductSearchResponse> searchProducts(String keyword) {
         String trimmedKeyword = keyword == null ? "" : keyword.trim();
         if (trimmedKeyword.isEmpty()) {
@@ -201,7 +225,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         try {
-            Page<Product> page = productRepository.searchActiveProductsByKeyword(trimmedKeyword, PageRequest.of(0, SEARCH_LIMIT));
+            Page<Product> page = productRepository.searchActiveProductsByKeyword(
+                    trimmedKeyword,
+                    PageRequest.of(0, SEARCH_LIMIT)
+            );
             return page.getContent().stream().map(this::toSearchResponse).toList();
         } catch (BadRequestException ex) {
             throw ex;
@@ -236,7 +263,7 @@ public class ProductServiceImpl implements ProductService {
             return null;
         }
 
-        return java.util.Arrays.stream(imageUrl.split(","))
+        return Arrays.stream(imageUrl.split(","))
                 .map(String::trim)
                 .filter(url -> !url.isBlank())
                 .findFirst()
@@ -269,5 +296,11 @@ public class ProductServiceImpl implements ProductService {
         }
 
         return String.join(",", sanitizedUrls);
+    }
+
+    private void validatePagination(int page, int size) {
+        if (page < 0 || size <= 0 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException("Invalid pagination parameters");
+        }
     }
 }
