@@ -21,6 +21,7 @@ import com.example.fashionshop.modules.order.dto.OrderTrackingInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderTrackingStepResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
+import com.example.fashionshop.modules.payment.service.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +57,9 @@ class OrderControllerTest {
 
     @MockBean
     private OrderService orderService;
+
+    @MockBean
+    private PaymentService paymentService;
 
     @Test
     void orderDetailById_shouldReturnOrderDetailsForAdminOrStaff() throws Exception {
