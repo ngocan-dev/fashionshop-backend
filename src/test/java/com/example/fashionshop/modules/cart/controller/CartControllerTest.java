@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.cart.controller;
 
 import com.example.fashionshop.common.exception.CartUpdateException;
+import com.example.fashionshop.common.exception.CartLoadException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.modules.cart.dto.CartItemResponse;
@@ -19,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +37,39 @@ class CartControllerTest {
     private CartService cartService;
 
     @Test
+    void getMyCart_shouldReturnEmptyCartForFirstTimeCustomer() throws Exception {
+        CartResponse cartResponse = CartResponse.builder()
+                .cartId(7)
+                .items(List.of())
+                .totalItems(0)
+                .distinctItemCount(0)
+                .subtotal(BigDecimal.ZERO)
+                .totalPrice(BigDecimal.ZERO)
+                .empty(true)
+                .build();
+
+        when(cartService.getMyCart()).thenReturn(cartResponse);
+
+        mockMvc.perform(get("/api/cart").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Cart fetched successfully"))
+                .andExpect(jsonPath("$.data.totalItems").value(0))
+                .andExpect(jsonPath("$.data.distinctItemCount").value(0))
+                .andExpect(jsonPath("$.data.empty").value(true));
+    }
+
+    @Test
+    void getMyCart_shouldReturnRetrievalFailureMessageWhenLoadingFails() throws Exception {
+        when(cartService.getMyCart()).thenThrow(new CartLoadException());
+
+        mockMvc.perform(get("/api/cart").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load cart items"));
+    }
+
+    @Test
     void removeCartItem_shouldReturnUpdatedCartWithRecalculatedTotalsAndBadgeCount() throws Exception {
         CartResponse cartResponse = CartResponse.builder()
                 .cartId(7)
@@ -47,7 +82,8 @@ class CartControllerTest {
                         .quantity(1)
                         .lineTotal(new BigDecimal("120.00"))
                         .build()))
-                .itemCount(1)
+                .totalItems(1)
+                .distinctItemCount(1)
                 .subtotal(new BigDecimal("120.00"))
                 .totalPrice(new BigDecimal("120.00"))
                 .empty(false)
@@ -60,7 +96,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Item removed from cart"))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
-                .andExpect(jsonPath("$.data.itemCount").value(1))
+                .andExpect(jsonPath("$.data.totalItems").value(1))
                 .andExpect(jsonPath("$.data.subtotal").value(120.00))
                 .andExpect(jsonPath("$.data.totalPrice").value(120.00))
                 .andExpect(jsonPath("$.data.empty").value(false));
