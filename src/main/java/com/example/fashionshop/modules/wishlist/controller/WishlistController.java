@@ -1,8 +1,11 @@
 package com.example.fashionshop.modules.wishlist.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
+import com.example.fashionshop.modules.wishlist.dto.AddWishlistItemRequest;
+import com.example.fashionshop.modules.wishlist.dto.AddWishlistItemResponse;
 import com.example.fashionshop.modules.wishlist.dto.WishlistResponse;
 import com.example.fashionshop.modules.wishlist.service.WishlistService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -22,13 +25,21 @@ public class WishlistController {
         return ApiResponse.success("Wishlist fetched successfully", wishlistService.getMyWishlist());
     }
 
-    @PostMapping("/{productId}")
-    public ApiResponse<Void> addToWishlist(@PathVariable Integer productId) {
-        wishlistService.addToWishlist(productId);
-        return ApiResponse.success("Added to wishlist successfully", null);
+    @GetMapping("/items/contains/{productId}")
+    public ApiResponse<Boolean> isProductInWishlist(@PathVariable Integer productId) {
+        return ApiResponse.success("Wishlist state fetched successfully", wishlistService.isProductInWishlist(productId));
     }
 
-    @DeleteMapping("/{productId}")
+    @PostMapping("/items")
+    public ApiResponse<AddWishlistItemResponse> addToWishlist(@Valid @RequestBody AddWishlistItemRequest request) {
+        AddWishlistItemResponse response = wishlistService.addToWishlist(request);
+        String message = response.isAlreadyInWishlist()
+                ? "Product already in wishlist"
+                : "Added to wishlist successfully";
+        return ApiResponse.success(message, response);
+    }
+
+    @DeleteMapping("/items/{productId}")
     public ApiResponse<Void> removeFromWishlist(@PathVariable Integer productId) {
         wishlistService.removeFromWishlist(productId);
         return ApiResponse.success("Removed from wishlist successfully", null);

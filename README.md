@@ -269,3 +269,81 @@ Storefront Header
 │   └── Calls GET /api/products/search?keyword={query}
 └── Cart Icon
 ```
+
+## Customer Add to Wishlist (UC-29)
+- **Endpoint:** `POST /api/wishlist/items`
+- **Role:** `CUSTOMER`
+- **Request body:**
+  ```json
+  {
+    "productId": 101
+  }
+  ```
+- **Behavior:**
+  - Requires authenticated customer (JWT)
+  - Validates product id and product existence
+  - Prevents duplicates for `(user_id, product_id)` pair
+  - Returns `alreadyInWishlist` to support duplicate/informational UI state
+  - Returns `wishlistCount` for future wishlist badge support
+  - Update failures return `500` with message `Unable to add product to wishlist`
+
+Optional helper endpoint for heart state:
+- `GET /api/wishlist/items/contains/{productId}`
+
+Example responses:
+```json
+{
+  "success": true,
+  "message": "Added to wishlist successfully",
+  "data": {
+    "alreadyInWishlist": false,
+    "wishlistCount": 5,
+    "item": {
+      "wishlistId": 31,
+      "productId": 101,
+      "productName": "Classic Blazer",
+      "price": 120.00,
+      "imageUrl": "https://cdn.example.com/product-101.jpg",
+      "createdAt": "2026-04-05T09:40:00"
+    }
+  }
+}
+```
+
+```json
+{
+  "success": true,
+  "message": "Product already in wishlist",
+  "data": {
+    "alreadyInWishlist": true,
+    "wishlistCount": 5,
+    "item": {
+      "wishlistId": 31,
+      "productId": 101,
+      "productName": "Classic Blazer",
+      "price": 120.00,
+      "imageUrl": "https://cdn.example.com/product-101.jpg",
+      "createdAt": "2026-04-05T09:40:00"
+    }
+  }
+}
+```
+
+### Frontend integration samples (product detail + product card)
+1. **Product detail page**
+   - Place a heart icon button near **Add to Cart / Buy Now**.
+   - On click:
+     - Disable button while awaiting API.
+     - Call `POST /api/wishlist/items` with current `productId`.
+     - If response message is `Added to wishlist successfully` -> show success toast and fill heart icon.
+     - If response message is `Product already in wishlist` -> show informational toast and keep filled heart.
+     - On failure -> show `Unable to add product to wishlist`.
+
+2. **Product card/grid item**
+   - Reuse the same wishlist-heart component used by detail page.
+   - Keep shared states: `idle`, `loading`, `added`, `duplicate`, `error`.
+   - Optionally preload `GET /api/wishlist/items/contains/{productId}` for initial heart fill state.
+
+3. **Unauthenticated behavior**
+   - API returns `401` when token is missing/invalid.
+   - Frontend should follow existing auth flow: redirect to login page or open login modal.
