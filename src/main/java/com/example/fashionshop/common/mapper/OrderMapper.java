@@ -1,13 +1,19 @@
 package com.example.fashionshop.common.mapper;
 
-import com.example.fashionshop.modules.order.dto.OrderItemResponse;
-import com.example.fashionshop.modules.order.dto.OrderResponse;
+import com.example.fashionshop.modules.invoice.entity.Invoice;
+import com.example.fashionshop.modules.order.dto.*;
 import com.example.fashionshop.modules.order.entity.Order;
 import com.example.fashionshop.modules.order.entity.OrderItem;
+import com.example.fashionshop.modules.payment.entity.Payment;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public final class OrderMapper {
+
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
 
     private OrderMapper() {
     }
@@ -25,6 +31,44 @@ public final class OrderMapper {
                 .build();
     }
 
+    public static OrderDetailResponse toDetailResponse(Order order,
+                                                       List<OrderItem> items,
+                                                       Optional<Invoice> invoice,
+                                                       Optional<Payment> latestPayment) {
+        BigDecimal subtotal = calculateSubtotal(items);
+
+        return OrderDetailResponse.builder()
+                .summary(OrderSummaryResponse.builder()
+                        .orderId(order.getId())
+                        .orderCode(invoice.map(Invoice::getInvoiceNumber).orElse(null))
+                        .orderDate(order.getCreatedAt())
+                        .orderStatus(order.getStatus())
+                        .paymentStatus(latestPayment.map(payment -> payment.getPaymentStatus().name())
+                                .orElseGet(() -> invoice.map(invoiceEntity -> invoiceEntity.getPaymentStatus().name())
+                                        .orElse("UNPAID")))
+                        .paymentMethod(latestPayment.map(payment -> payment.getPaymentMethod().name()).orElse(null))
+                        .subtotal(subtotal)
+                        .shippingFee(ZERO)
+                        .discountAmount(ZERO)
+                        .totalAmount(order.getTotalPrice())
+                        .build())
+                .customer(OrderCustomerInfoResponse.builder()
+                        .fullName(order.getUser().getFullName())
+                        .email(order.getUser().getEmail())
+                        .phoneNumber(order.getPhone())
+                        .shippingAddress(order.getShippingAddress())
+                        .billingAddress(null)
+                        .build())
+                .items(items.stream().map(OrderMapper::toDetailItemResponse).toList())
+                .additionalInfo(OrderAdditionalInfoResponse.builder()
+                        .customerNote(null)
+                        .deliveryMethod(null)
+                        .internalNote(invoice.map(Invoice::getNote).orElse(null))
+                        .lastUpdatedAt(resolveLastUpdated(order, latestPayment))
+                        .build())
+                .build();
+    }
+
     private static OrderItemResponse toItemResponse(OrderItem item) {
         return OrderItemResponse.builder()
                 .productId(item.getProduct().getId())
@@ -32,5 +76,35 @@ public final class OrderMapper {
                 .quantity(item.getQuantity())
                 .price(item.getPrice())
                 .build();
+    }
+
+    private static OrderDetailItemResponse toDetailItemResponse(OrderItem item) {
+        BigDecimal unitPrice = item.getPrice() == null ? ZERO : item.getPrice();
+        return OrderDetailItemResponse.builder()
+                .productId(item.getProduct().getId())
+                .productImage(item.getProduct().getImageUrl())
+                .productName(item.getProduct().getName())
+                .sku(null)
+                .quantity(item.getQuantity())
+                .unitPrice(unitPrice)
+                .lineTotal(unitPrice.multiply(BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity())))
+                .variant(null)
+                .build();
+    }
+
+    private static BigDecimal calculateSubtotal(List<OrderItem> items) {
+        return items.stream()
+                .map(OrderMapper::lineTotal)
+                .reduce(ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal lineTotal(OrderItem item) {
+        BigDecimal unitPrice = item.getPrice() == null ? ZERO : item.getPrice();
+        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
+    }
+
+    private static LocalDateTime resolveLastUpdated(Order order, Optional<Payment> latestPayment) {
+        return latestPayment.map(Payment::getPaidAt).orElse(order.getCreatedAt());
     }
 }
