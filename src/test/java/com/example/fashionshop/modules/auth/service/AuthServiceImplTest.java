@@ -2,31 +2,27 @@ package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.AccountCreationException;
-import com.example.fashionshop.modules.auth.dto.AuthResponse;
-import com.example.fashionshop.modules.auth.dto.RegisterRequest;
 import com.example.fashionshop.common.exception.AuthenticationSystemException;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
+import com.example.fashionshop.modules.auth.dto.RegisterRequest;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import com.example.fashionshop.security.jwt.JwtService;
+import com.example.fashionshop.security.jwt.TokenBlacklistService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +50,9 @@ class AuthServiceImplTest {
     private JwtService jwtService;
 
     @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
     private UserDetails userDetails;
 
     @InjectMocks
@@ -68,12 +67,11 @@ class AuthServiceImplTest {
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-password");
-        when(userRepository.save(any(com.example.fashionshop.modules.user.entity.User.class))).thenAnswer(invocation -> {
-            com.example.fashionshop.modules.user.entity.User user = invocation.getArgument(0);
-            user.setId(99);
-            return user;
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User savedUser = invocation.getArgument(0);
+            savedUser.setId(99);
+            return savedUser;
         });
-        UserDetails userDetails = User.withUsername(request.getEmail()).password("encoded-password").authorities("CUSTOMER").build();
         when(userDetailsService.loadUserByUsername(request.getEmail())).thenReturn(userDetails);
         when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
 
@@ -94,17 +92,19 @@ class AuthServiceImplTest {
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-password");
-        when(userRepository.save(any(com.example.fashionshop.modules.user.entity.User.class)))
-                .thenThrow(new RuntimeException("DB error"));
+        when(userRepository.save(any(User.class))).thenThrow(new RuntimeException("DB error"));
 
         assertThrows(AccountCreationException.class, () -> authService.register(request));
+    }
+
+    @Test
     void loginShouldReturnAuthResponseWhenCredentialsAreValid() {
         LoginRequest request = new LoginRequest();
         request.setEmail("user@test.com");
         request.setPassword("password123");
 
         User user = User.builder()
-                .id(1L)
+                .id(1)
                 .fullName("Test User")
                 .email("user@test.com")
                 .role(Role.CUSTOMER)
@@ -117,7 +117,7 @@ class AuthServiceImplTest {
         AuthResponse response = authService.login(request);
 
         assertEquals("jwt-token", response.getToken());
-        assertEquals(1L, response.getUserId());
+        assertEquals(1, response.getUserId());
         assertEquals("Test User", response.getFullName());
         assertEquals("user@test.com", response.getEmail());
         assertEquals(Role.CUSTOMER, response.getRole());
