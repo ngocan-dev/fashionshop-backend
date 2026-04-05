@@ -27,7 +27,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ApiResponse<Void> logout() {
+    public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        authService.logout(authHeader);
         return ApiResponse.success("Logout successfully", null);
     }
 }

@@ -2,12 +2,14 @@ package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
 import com.example.fashionshop.modules.auth.dto.RegisterRequest;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import com.example.fashionshop.security.jwt.JwtService;
+import com.example.fashionshop.security.jwt.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +27,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     public AuthResponse register(RegisterRequest request) {
@@ -69,5 +72,23 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(user.getRole())
                 .build();
+    }
+
+    @Override
+    public void logout(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        String token = authHeader.substring(7);
+        if (tokenBlacklistService.isBlacklisted(token)) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        try {
+            tokenBlacklistService.blacklistToken(token, jwtService.extractExpiration(token));
+        } catch (Exception ex) {
+            throw new UnauthorizedException("Session already expired");
+        }
     }
 }
