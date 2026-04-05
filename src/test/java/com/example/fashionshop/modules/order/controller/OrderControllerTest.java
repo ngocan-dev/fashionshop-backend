@@ -1,11 +1,18 @@
 package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
+import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
-import com.example.fashionshop.modules.order.dto.*;
+import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
+import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
+import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
+import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,8 +27,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -32,6 +41,9 @@ class OrderControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockBean
     private OrderService orderService;
@@ -90,6 +102,54 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.message").value("Invalid order id"));
     }
 
+    @Test
+    void updateStatus_shouldReturnUpdatedStatus() throws Exception {
+        UpdateOrderStatusResponse response = UpdateOrderStatusResponse.builder()
+                .orderId(1001)
+                .previousStatus(OrderStatus.CONFIRMED)
+                .currentStatus(OrderStatus.PROCESSING)
+                .allowedNextStatuses(List.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED))
+                .updatedAt(LocalDateTime.of(2026, 4, 1, 10, 10))
+                .updatedByUserId(9)
+                .build();
+
+        when(orderService.updateOrderStatus(any(), any())).thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/1001/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("status", "processing"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order status updated successfully"))
+                .andExpect(jsonPath("$.data.orderId").value(1001))
+                .andExpect(jsonPath("$.data.currentStatus").value("processing"));
+    }
+
+    @Test
+    void updateStatus_shouldReturnBadRequestForInvalidTransition() throws Exception {
+        when(orderService.updateOrderStatus(any(), any()))
+                .thenThrow(new BadRequestException("Invalid status transition from shipped to cancelled"));
+
+        mockMvc.perform(patch("/api/orders/1001/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("status", "cancelled"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Invalid status transition from shipped to cancelled"));
+    }
+
+    @Test
+    void updateStatus_shouldReturnFailureMessageWhenServiceErrors() throws Exception {
+        when(orderService.updateOrderStatus(any(), any())).thenThrow(new OrderStatusUpdateException());
+
+        mockMvc.perform(patch("/api/orders/1001/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("status", "processing"))))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Order status update failed"));
+    }
+
     private OrderDetailResponse buildOrderDetailResponse() {
         return OrderDetailResponse.builder()
                 .summary(OrderSummaryResponse.builder()
@@ -121,7 +181,7 @@ class OrderControllerTest {
                         .lineTotal(new BigDecimal("320.00"))
                         .variant(null)
                         .build()))
-                .additionalInfo(OrderAdditionalInfoResponse.builder()
+                .additionalInfo(com.example.fashionshop.modules.order.dto.OrderAdditionalInfoResponse.builder()
                         .customerNote(null)
                         .deliveryMethod(null)
                         .internalNote("Invoice created automatically when placing order")
