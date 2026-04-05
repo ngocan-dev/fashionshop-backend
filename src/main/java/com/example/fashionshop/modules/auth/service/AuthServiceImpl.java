@@ -1,20 +1,26 @@
 package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
+import com.example.fashionshop.common.exception.AccountCreationException;
+import com.example.fashionshop.common.exception.AuthenticationSystemException;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
 import com.example.fashionshop.modules.auth.dto.RegisterRequest;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import com.example.fashionshop.security.jwt.JwtService;
+import com.example.fashionshop.security.jwt.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     public AuthResponse register(RegisterRequest request) {
@@ -32,42 +39,83 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Email already exists");
         }
 
+        String fullName = resolveFullName(request);
         User user = User.builder()
-                .fullName(request.getFullName())
+                .fullName(fullName)
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.CUSTOMER)
                 .isActive(true)
                 .build();
 
-        User savedUser = userRepository.save(user);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
+        try {
+            User savedUser = userRepository.save(user);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
 
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(savedUser.getId())
-                .fullName(savedUser.getFullName())
-                .email(savedUser.getEmail())
-                .role(savedUser.getRole())
-                .build();
+            return AuthResponse.builder()
+                    .token(jwtService.generateToken(userDetails))
+                    .userId(savedUser.getId())
+                    .fullName(savedUser.getFullName())
+                    .email(savedUser.getEmail())
+                    .role(savedUser.getRole())
+                    .build();
+        } catch (Exception exception) {
+            throw new AccountCreationException("Account creation failed");
+        }
     }
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("Invalid credentials"));
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(user.getId())
-                .fullName(user.getFullName())
-                .email(user.getEmail())
-                .role(user.getRole())
-                .build();
+            UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+            return AuthResponse.builder()
+                    .token(jwtService.generateToken(userDetails))
+                    .userId(user.getId())
+                    .fullName(user.getFullName())
+                    .email(user.getEmail())
+                    .role(user.getRole())
+                    .build();
+        } catch (AuthenticationException ex) {
+            throw new BadRequestException("Invalid email or password");
+        } catch (Exception ex) {
+            throw new AuthenticationSystemException("Login failed, please try again later");
+        }
+    }
+
+    @Override
+    public void logout(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        String token = authHeader.substring(7);
+        if (tokenBlacklistService.isBlacklisted(token)) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        try {
+            tokenBlacklistService.blacklistToken(token, jwtService.extractExpiration(token));
+        } catch (Exception ex) {
+            throw new UnauthorizedException("Session already expired");
+        }
+    }
+
+    private String resolveFullName(RegisterRequest request) {
+        if (StringUtils.hasText(request.getFullName())) {
+            return request.getFullName().trim();
+        }
+        String email = request.getEmail();
+        int delimiterIndex = email.indexOf('@');
+        if (delimiterIndex > 0) {
+            return email.substring(0, delimiterIndex);
+        }
+        return email;
     }
 }

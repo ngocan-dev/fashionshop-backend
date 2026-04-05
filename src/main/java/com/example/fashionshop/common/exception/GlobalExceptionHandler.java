@@ -53,14 +53,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccountDeletionFailure(AccountDeletionException ex) {
+    @ExceptionHandler(CustomerAccountRetrievalException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCustomerAccountRetrieval(CustomerAccountRetrievalException ex) {
+    @ExceptionHandler(AccountCreationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
+    @ExceptionHandler(AuthenticationSystemException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException ex) {
+        boolean hasMissingRequiredField = false;
         Map<String, String> errors = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
+            if ("NotBlank".equals(error.getCode())) {
+                hasMissingRequiredField = true;
+            }
+        }
+        if (hasMissingRequiredField) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
         }
         return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));
     }
