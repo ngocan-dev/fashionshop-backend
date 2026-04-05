@@ -10,6 +10,8 @@ import com.example.fashionshop.modules.user.repository.UserRepository;
 import com.example.fashionshop.modules.wishlist.dto.WishlistResponse;
 import com.example.fashionshop.modules.wishlist.entity.Wishlist;
 import com.example.fashionshop.modules.wishlist.repository.WishlistRepository;
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class WishlistServiceImpl implements WishlistService {
 
     private final WishlistRepository wishlistRepository;
