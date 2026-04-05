@@ -180,3 +180,24 @@ Frontend mapping recommendation for product detail page:
    - if API returns stock conflict, show `Insufficient stock available`
    - if API returns 500/cart update error, show `Unable to add item to cart`
 4. On success, show toast and update header badge with `data.totalItems`.
+## Customer Storefront Search (UC-22)
+- **Endpoint:** `GET /api/products/search?keyword=...`
+- **Role:** Public customer storefront endpoint.
+- **Purpose:** Search active products by product name, category/type, and description keyword.
+- **Behavior:**
+  - Trims incoming keyword
+  - Returns **top 5** most relevant products only
+  - Empty keyword -> `400` with message `Please enter a keyword`
+  - No matching products -> `200` with message `No results found` and empty array
+  - Query failure -> `500` with message `Unable to load search results`
+- **Search item fields:** id, slug, name, category/type, price, thumbnail, short description snippet, stock status, detail URL.
+
+Example storefront integration point (frontend header/navbar):
+```text
+Storefront Header
+├── Logo
+├── Category Menu
+├── Search Bar (Enter key or Search button)
+│   └── Calls GET /api/products/search?keyword={query}
+└── Cart Icon
+```

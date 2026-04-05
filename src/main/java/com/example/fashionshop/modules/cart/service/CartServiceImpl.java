@@ -44,7 +44,6 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
     public CartResponse addToCart(AddToCartRequest request) {
         validateQuantity(request.getQuantity());
 
@@ -69,42 +68,65 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional
     public CartResponse updateCartItem(Integer itemId, UpdateCartItemRequest request) {
+        validateCartItemId(itemId);
         validateQuantity(request.getQuantity());
 
-        Cart cart = getOrCreateCart();
-        CartItem item = cartItemRepository.findById(itemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
-        if (!item.getCart().getId().equals(cart.getId())) {
-            throw new ResourceNotFoundException("Cart item not found in your cart");
-        }
+        Cart cart = getCurrentCartOrThrow();
+        CartItem item = getCartItemOrThrow(cart, itemId);
 
         Product product = findValidProduct(item.getProduct().getId());
         validateStock(product, request.getQuantity());
 
-        item.setQuantity(request.getQuantity());
-        cartItemRepository.save(item);
-        return buildCartResponse(cart);
+        try {
+            item.setQuantity(request.getQuantity());
+            cartItemRepository.save(item);
+            return buildCartResponse(cart);
+        } catch (DataAccessException ex) {
+            throw new CartUpdateException("Unable to update cart", ex);
+        }
     }
 
     @Override
-    @Transactional
     public CartResponse removeCartItem(Integer itemId) {
-        Cart cart = getOrCreateCart();
-        CartItem item = cartItemRepository.findById(itemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
-        if (!item.getCart().getId().equals(cart.getId())) {
-            throw new ResourceNotFoundException("Cart item not found in your cart");
+        validateCartItemId(itemId);
+        Cart cart = getCurrentCartOrThrow();
+        CartItem item = getCartItemOrThrow(cart, itemId);
+
+        try {
+            cartItemRepository.delete(item);
+            cartItemRepository.flush();
+            return buildCartResponse(cart);
+        } catch (DataAccessException ex) {
+            throw new CartUpdateException("Unable to update cart", ex);
         }
-        cartItemRepository.delete(item);
-        return buildCartResponse(cart);
     }
 
     private Cart getOrCreateCart() {
         User user = getCurrentUser();
         return cartRepository.findByUser(user)
                 .orElseGet(() -> cartRepository.save(Cart.builder().user(user).build()));
+    }
+
+    private Cart getCurrentCartOrThrow() {
+        User user = getCurrentUser();
+        return cartRepository.findByUser(user)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
+    }
+
+    private CartItem getCartItemOrThrow(Cart cart, Integer itemId) {
+        CartItem item = cartItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Item not found in cart"));
+        if (!item.getCart().getId().equals(cart.getId())) {
+            throw new ResourceNotFoundException("Item not found in cart");
+        }
+        return item;
+    }
+
+    private void validateCartItemId(Integer itemId) {
+        if (itemId == null || itemId <= 0) {
+            throw new BadRequestException("Invalid cart item id");
+        }
     }
 
     private User getCurrentUser() {
@@ -117,7 +139,9 @@ public class CartServiceImpl implements CartService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        if (!Boolean.TRUE.equals(product.getIsActive()) || product.getStockQuantity() == null || product.getStockQuantity() <= 0) {
+        if (!Boolean.TRUE.equals(product.getIsActive())
+                || product.getStockQuantity() == null
+                || product.getStockQuantity() <= 0) {
             throw new BadRequestException("Product is unavailable");
         }
 
@@ -139,26 +163,36 @@ public class CartServiceImpl implements CartService {
 
     private CartResponse buildCartResponse(Cart cart) {
         List<CartItemResponse> items = cartItemRepository.findByCart(cart).stream().map(item -> {
-            BigDecimal lineTotal = item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            BigDecimal lineTotal = item.getProduct().getPrice()
+                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+
             return CartItemResponse.builder()
                     .itemId(item.getId())
                     .productId(item.getProduct().getId())
                     .productName(item.getProduct().getName())
+                    .productImage(item.getProduct().getImageUrl())
                     .price(item.getProduct().getPrice())
                     .quantity(item.getQuantity())
                     .lineTotal(lineTotal)
                     .build();
         }).toList();
 
-        BigDecimal total = items.stream().map(CartItemResponse::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        int totalItems = items.stream().mapToInt(CartItemResponse::getQuantity).sum();
+        BigDecimal subtotal = items.stream()
+                .map(CartItemResponse::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        int totalItems = items.stream()
+                .mapToInt(CartItemResponse::getQuantity)
+                .sum();
 
         return CartResponse.builder()
                 .cartId(cart.getId())
                 .items(items)
                 .totalItems(totalItems)
                 .distinctItemCount(items.size())
-                .totalPrice(total)
+                .subtotal(subtotal)
+                .totalPrice(subtotal)
+                .empty(items.isEmpty())
                 .build();
     }
 }
