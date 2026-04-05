@@ -187,6 +187,9 @@ class AdminProductControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Product deletion failed"));
+    }
+
+    @Test
     void updateProduct_shouldReturnUpdatedProductForAdminOrStaff() throws Exception {
         ProductDetailResponse updated = ProductDetailResponse.builder()
                 .id(101)

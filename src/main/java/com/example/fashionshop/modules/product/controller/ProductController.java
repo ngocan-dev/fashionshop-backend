@@ -4,11 +4,14 @@ import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
+import com.example.fashionshop.modules.product.dto.ProductSearchResponse;
 import com.example.fashionshop.modules.product.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
@@ -28,6 +31,15 @@ public class ProductController {
     @GetMapping("/{id}")
     public ApiResponse<ProductResponse> getDetail(@PathVariable Integer id) {
         return ApiResponse.success("Product detail fetched successfully", productService.getDetail(id));
+    }
+
+    @GetMapping("/search")
+    public ApiResponse<List<ProductSearchResponse>> search(@RequestParam String keyword) {
+        List<ProductSearchResponse> results = productService.searchProducts(keyword);
+        if (results.isEmpty()) {
+            return ApiResponse.success("No results found", results);
+        }
+        return ApiResponse.success("Search results fetched successfully", results);
     }
 
     @PostMapping
