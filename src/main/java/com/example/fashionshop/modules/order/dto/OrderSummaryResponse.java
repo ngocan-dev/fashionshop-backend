@@ -20,11 +20,11 @@ public class OrderSummaryResponse {
     private OrderStatus orderStatus;
     private String paymentStatus;
     private String paymentMethod;
+    private BigDecimal subtotal;
+    private BigDecimal shippingFee;
+    private BigDecimal discountAmount;
     private BigDecimal totalAmount;
     private Integer itemCount;
     private String shippingStatus;
     private LocalDateTime updatedAt;
-    private BigDecimal subtotal;
-    private BigDecimal shippingFee;
-    private BigDecimal discountAmount;
 }

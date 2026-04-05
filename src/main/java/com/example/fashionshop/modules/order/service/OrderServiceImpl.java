@@ -4,9 +4,10 @@ import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.ForbiddenException;
+import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
-import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderPlacementException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
@@ -20,16 +21,16 @@ import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.CheckoutSummaryItemResponse;
 import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
-import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
+import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
-import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
-import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.entity.Order;
@@ -44,8 +45,8 @@ import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -71,9 +72,16 @@ public class OrderServiceImpl implements OrderService {
     private static final BigDecimal DEFAULT_SHIPPING_FEE = ZERO;
     private static final BigDecimal DEFAULT_DISCOUNT = ZERO;
 
-    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = buildAllowedTransitions();
+    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS =
+            buildAllowedTransitions();
+
     private static final Set<OrderStatus> CUSTOMER_NON_CANCELLABLE_STATUSES =
-            EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED);
+            EnumSet.of(
+                    OrderStatus.SHIPPED,
+                    OrderStatus.DELIVERED,
+                    OrderStatus.COMPLETED,
+                    OrderStatus.CANCELLED
+            );
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -163,7 +171,9 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse placeOrder(PlaceOrderRequest request) {
         try {
             User user = getCurrentUser();
-            Cart cart = cartRepository.findByUser(user).orElseThrow(() -> new BadRequestException("Cart is empty"));
+            Cart cart = cartRepository.findByUser(user)
+                    .orElseThrow(() -> new BadRequestException("Cart is empty"));
+
             List<CartItem> cartItems = cartItemRepository.findByCart(cart);
             if (cartItems.isEmpty()) {
                 throw new BadRequestException("Cart is empty");
@@ -175,10 +185,13 @@ public class OrderServiceImpl implements OrderService {
 
             BigDecimal subtotal = ZERO;
             List<CartItem> validItems = new ArrayList<>();
+
             for (CartItem cartItem : cartItems) {
                 Product product = validateAndLockProduct(cartItem.getProduct().getId());
                 validateProductAvailability(product, cartItem);
-                BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+
+                BigDecimal lineTotal = product.getPrice()
+                        .multiply(BigDecimal.valueOf(cartItem.getQuantity()));
                 subtotal = subtotal.add(lineTotal);
                 validItems.add(cartItem);
             }
@@ -227,10 +240,16 @@ public class OrderServiceImpl implements OrderService {
             invoiceRepository.save(invoice);
 
             cartItemRepository.deleteByCart(cart);
-            notificationService.sendOrderNotification(user.getId(), "Order #" + order.getId() + " placed successfully");
+            notificationService.sendOrderNotification(
+                    user.getId(),
+                    "Order #" + order.getId() + " placed successfully"
+            );
 
-            return OrderMapper.toResponse(order, orderItemRepository.findByOrder(order),
-                    paymentRepository.findTopByOrderOrderByIdDesc(order));
+            return OrderMapper.toResponse(
+                    order,
+                    orderItemRepository.findByOrder(order),
+                    paymentRepository.findTopByOrderOrderByIdDesc(order)
+            );
         } catch (BadRequestException | ResourceNotFoundException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -242,19 +261,30 @@ public class OrderServiceImpl implements OrderService {
     public List<OrderResponse> getMyOrders() {
         User user = getCurrentUser();
         return orderRepository.findByUser(user).stream()
-                .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order),
-                        paymentRepository.findTopByOrderOrderByIdDesc(order)))
+                .map(order -> OrderMapper.toResponse(
+                        order,
+                        orderItemRepository.findByOrder(order),
+                        paymentRepository.findTopByOrderOrderByIdDesc(order)
+                ))
                 .toList();
     }
 
     @Override
     public PaginationResponse<OrderSummaryResponse> getMyOrderHistory(CustomerOrderHistoryQuery query) {
         User user = getCurrentUser();
-        try {
-            Pageable pageable = PageRequest.of(query.getPage(), query.getSize(),
-                    resolveSort(query.getSortBy(), query.getSortDir()));
 
-            Page<Order> orderPage = orderRepository.findAll(buildCustomerOrderHistorySpecification(user, query), pageable);
+        try {
+            Pageable pageable = PageRequest.of(
+                    query.getPage(),
+                    query.getSize(),
+                    resolveSort(query.getSortBy(), query.getSortDir())
+            );
+
+            Page<Order> orderPage = orderRepository.findAll(
+                    buildCustomerOrderHistorySpecification(user, query),
+                    pageable
+            );
+
             List<OrderSummaryResponse> items = orderPage.getContent().stream()
                     .map(this::toOrderSummaryResponse)
                     .toList();
@@ -275,12 +305,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderDetailResponse getMyOrderDetail(Integer orderId) {
-        User user = getCurrentUser();
-        Order order = getOrderOrThrow(orderId);
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You are not allowed to access this order");
+        try {
+            User user = getCurrentUser();
+            Order order = orderRepository.findByIdAndUserId(orderId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+            return buildOrderDetailResponse(order);
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderDetailLoadException(ex);
         }
-        return buildOrderDetailResponse(order);
     }
 
     @Override
@@ -289,6 +323,7 @@ public class OrderServiceImpl implements OrderService {
         try {
             User user = getCurrentUser();
             Order order = getOrderOrThrow(orderId);
+
             validateCustomerOwnsOrder(user, order);
             validateOrderCanBeCancelledByCustomer(order);
 
@@ -303,7 +338,7 @@ public class OrderServiceImpl implements OrderService {
                     .cancellationReason(request != null ? request.getReason() : null)
                     .updatedAt(order.getUpdatedAt())
                     .build();
-        } catch (BadRequestException | ResourceNotFoundException ex) {
+        } catch (BadRequestException | ResourceNotFoundException | ForbiddenException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new OrderCancellationException();
@@ -313,8 +348,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderResponse> getAllOrders() {
         return orderRepository.findAll().stream()
-                .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order),
-                        paymentRepository.findTopByOrderOrderByIdDesc(order)))
+                .map(order -> OrderMapper.toResponse(
+                        order,
+                        orderItemRepository.findByOrder(order),
+                        paymentRepository.findTopByOrderOrderByIdDesc(order)
+                ))
                 .toList();
     }
 
@@ -323,7 +361,10 @@ public class OrderServiceImpl implements OrderService {
         try {
             Sort sort = resolveSort(query.getSortBy(), query.getSortDir());
             PageRequest pageRequest = PageRequest.of(query.getPage(), query.getSize(), sort);
-            Page<Order> orderPage = orderRepository.findAll(buildManageOrderSpecification(query), pageRequest);
+            Page<Order> orderPage = orderRepository.findAll(
+                    buildManageOrderSpecification(query),
+                    pageRequest
+            );
 
             List<OrderSummaryResponse> items = orderPage.getContent().stream()
                     .map(this::toOrderSummaryResponse)
@@ -415,6 +456,7 @@ public class OrderServiceImpl implements OrderService {
 
     private String buildShippingAddress(PlaceOrderRequest request) {
         List<String> chunks = new ArrayList<>();
+
         if (hasText(request.getShippingAddress())) {
             chunks.add(request.getShippingAddress().trim());
         }
@@ -430,6 +472,7 @@ public class OrderServiceImpl implements OrderService {
         if (hasText(request.getPostalCode())) {
             chunks.add(request.getPostalCode().trim());
         }
+
         return String.join(", ", chunks);
     }
 
@@ -446,6 +489,7 @@ public class OrderServiceImpl implements OrderService {
         if (!Boolean.TRUE.equals(product.getIsActive())) {
             throw new BadRequestException("Product unavailable");
         }
+
         Integer availableStock = product.getStockQuantity();
         Integer requestedQty = cartItem.getQuantity();
 
@@ -465,12 +509,16 @@ public class OrderServiceImpl implements OrderService {
 
         Set<OrderStatus> allowed = ALLOWED_STATUS_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(next)) {
-            throw new BadRequestException("Invalid status transition from " + current.getValue() + " to " + next.getValue());
+            throw new BadRequestException(
+                    "Invalid status transition from " + current.getValue() + " to " + next.getValue()
+            );
         }
     }
 
     private List<OrderStatus> getAllowedNextStatuses(OrderStatus currentStatus) {
-        return ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of()).stream().toList();
+        return ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of())
+                .stream()
+                .toList();
     }
 
     private Sort resolveSort(String sortBy, String sortDir) {
@@ -479,15 +527,22 @@ public class OrderServiceImpl implements OrderService {
             case "id", "status", "totalPrice", "createdAt", "updatedAt" -> normalizedSortBy;
             default -> "createdAt";
         };
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
         return Sort.by(direction, safeSortBy);
     }
 
     private Specification<Order> buildManageOrderSpecification(OrderListQuery query) {
         return (root, criteriaQuery, criteriaBuilder) -> {
             var predicates = criteriaBuilder.conjunction();
+
             if (query.getStatus() != null) {
-                predicates.getExpressions().add(criteriaBuilder.equal(root.get("status"), query.getStatus()));
+                predicates.getExpressions().add(
+                        criteriaBuilder.equal(root.get("status"), query.getStatus())
+                );
             }
 
             if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
@@ -501,18 +556,28 @@ public class OrderServiceImpl implements OrderService {
                         )
                 );
             }
+
             return predicates;
         };
     }
 
-    private Specification<Order> buildCustomerOrderHistorySpecification(User user, CustomerOrderHistoryQuery query) {
+    private Specification<Order> buildCustomerOrderHistorySpecification(
+            User user,
+            CustomerOrderHistoryQuery query
+    ) {
         return (root, criteriaQuery, criteriaBuilder) -> {
             var predicates = criteriaBuilder.conjunction();
-            predicates.getExpressions().add(criteriaBuilder.equal(root.get("user").get("id"), user.getId()));
+
+            predicates.getExpressions().add(
+                    criteriaBuilder.equal(root.get("user").get("id"), user.getId())
+            );
 
             if (query.getStatus() != null) {
-                predicates.getExpressions().add(criteriaBuilder.equal(root.get("status"), query.getStatus()));
+                predicates.getExpressions().add(
+                        criteriaBuilder.equal(root.get("status"), query.getStatus())
+                );
             }
+
             return predicates;
         };
     }
@@ -532,7 +597,11 @@ public class OrderServiceImpl implements OrderService {
                 .orderDate(order.getCreatedAt())
                 .orderStatus(order.getStatus())
                 .paymentStatus(payment != null ? payment.getPaymentStatus().name() : PaymentStatus.UNPAID.name())
-                .paymentMethod(payment != null && payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
+                .paymentMethod(
+                        payment != null && payment.getPaymentMethod() != null
+                                ? payment.getPaymentMethod().name()
+                                : null
+                )
                 .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
@@ -544,6 +613,7 @@ public class OrderServiceImpl implements OrderService {
         if (orderStatus == null) {
             return "UNKNOWN";
         }
+
         return switch (orderStatus) {
             case PENDING, CONFIRMED, PROCESSING -> "PREPARING";
             case SHIPPED -> "IN_TRANSIT";
@@ -553,12 +623,13 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Order getOrderOrThrow(Integer orderId) {
-        return orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
     }
 
     private void validateCustomerOwnsOrder(User user, Order order) {
         if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You are not allowed to cancel this order");
+            throw new ForbiddenException("You are not allowed to cancel this order");
         }
     }
 
@@ -576,13 +647,36 @@ public class OrderServiceImpl implements OrderService {
 
     private static Map<OrderStatus, Set<OrderStatus>> buildAllowedTransitions() {
         Map<OrderStatus, Set<OrderStatus>> transitions = new EnumMap<>(OrderStatus.class);
-        transitions.put(OrderStatus.PENDING, EnumSet.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.PROCESSING, EnumSet.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.SHIPPED, EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED));
-        transitions.put(OrderStatus.DELIVERED, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED));
-        transitions.put(OrderStatus.COMPLETED, EnumSet.of(OrderStatus.COMPLETED));
-        transitions.put(OrderStatus.CANCELLED, EnumSet.of(OrderStatus.CANCELLED));
+
+        transitions.put(
+                OrderStatus.PENDING,
+                EnumSet.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.CONFIRMED,
+                EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.PROCESSING,
+                EnumSet.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.SHIPPED,
+                EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED)
+        );
+        transitions.put(
+                OrderStatus.DELIVERED,
+                EnumSet.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED)
+        );
+        transitions.put(
+                OrderStatus.COMPLETED,
+                EnumSet.of(OrderStatus.COMPLETED)
+        );
+        transitions.put(
+                OrderStatus.CANCELLED,
+                EnumSet.of(OrderStatus.CANCELLED)
+        );
+
         return transitions;
     }
 }

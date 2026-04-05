@@ -10,5 +10,6 @@ public class OrderCustomerInfoResponse {
     private String email;
     private String phoneNumber;
     private String shippingAddress;
+    private String deliveryNote;
     private String billingAddress;
 }

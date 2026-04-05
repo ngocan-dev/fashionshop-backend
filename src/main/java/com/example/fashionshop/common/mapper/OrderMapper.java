@@ -30,6 +30,7 @@ public final class OrderMapper {
                 .paymentMethod(latestPayment.map(Payment::getPaymentMethod).orElse(null))
                 .cancellationReason(order.getCancellationReason())
                 .createdAt(order.getCreatedAt())
+                .detailPath("/account/orders/" + order.getId())
                 .items(items.stream().map(OrderMapper::toItemResponse).toList())
                 .build();
     }
@@ -60,6 +61,7 @@ public final class OrderMapper {
                         .email(order.getUser().getEmail())
                         .phoneNumber(order.getPhone())
                         .shippingAddress(order.getShippingAddress())
+                        .deliveryNote(null)
                         .billingAddress(null)
                         .build())
                 .items(items.stream().map(OrderMapper::toDetailItemResponse).toList())
@@ -67,7 +69,10 @@ public final class OrderMapper {
                         .customerNote(order.getCustomerNote())
                         .deliveryMethod(null)
                         .internalNote(invoice.map(Invoice::getNote).orElse(null))
+                        .estimatedDeliveryDate(null)
+                        .cancelled(order.getStatus() != null && "CANCELLED".equals(order.getStatus().name()))
                         .cancellationReason(order.getCancellationReason())
+                        .createdAt(order.getCreatedAt())
                         .lastUpdatedAt(resolveLastUpdated(order, latestPayment))
                         .build())
                 .build();

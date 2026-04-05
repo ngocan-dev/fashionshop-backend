@@ -22,5 +22,6 @@ public class OrderResponse {
     private PaymentMethod paymentMethod;
     private String cancellationReason;
     private LocalDateTime createdAt;
+    private String detailPath;
     private List<OrderItemResponse> items;
 }
