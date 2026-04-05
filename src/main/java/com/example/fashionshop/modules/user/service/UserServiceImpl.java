@@ -43,12 +43,15 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email already exists");
         }
+        if (request.getRole() == Role.CUSTOMER) {
+            throw new BadRequestException("Invalid role for staff account");
+        }
         User currentUser = getCurrentUser();
         User staff = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.STAFF)
+                .role(request.getRole())
                 .isActive(true)
                 .managedBy(currentUser)
                 .build();
