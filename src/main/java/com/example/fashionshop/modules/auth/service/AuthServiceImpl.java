@@ -2,16 +2,20 @@ package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.AccountCreationException;
+import com.example.fashionshop.common.exception.AuthenticationSystemException;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
 import com.example.fashionshop.modules.auth.dto.RegisterRequest;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import com.example.fashionshop.security.jwt.JwtService;
+import com.example.fashionshop.security.jwt.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     public AuthResponse register(RegisterRequest request) {
@@ -61,21 +66,45 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("Invalid credentials"));
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(user.getId())
-                .fullName(user.getFullName())
-                .email(user.getEmail())
-                .role(user.getRole())
-                .build();
+            UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+            return AuthResponse.builder()
+                    .token(jwtService.generateToken(userDetails))
+                    .userId(user.getId())
+                    .fullName(user.getFullName())
+                    .email(user.getEmail())
+                    .role(user.getRole())
+                    .build();
+        } catch (AuthenticationException ex) {
+            throw new BadRequestException("Invalid email or password");
+        } catch (Exception ex) {
+            throw new AuthenticationSystemException("Login failed, please try again later");
+        }
+    }
+
+    @Override
+    public void logout(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        String token = authHeader.substring(7);
+        if (tokenBlacklistService.isBlacklisted(token)) {
+            throw new UnauthorizedException("Session already expired");
+        }
+
+        try {
+            tokenBlacklistService.blacklistToken(token, jwtService.extractExpiration(token));
+        } catch (Exception ex) {
+            throw new UnauthorizedException("Session already expired");
+        }
     }
 
     private String resolveFullName(RegisterRequest request) {

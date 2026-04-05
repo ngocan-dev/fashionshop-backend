@@ -2,10 +2,12 @@ package com.example.fashionshop.modules.user.service;
 
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.StaffAccountLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.UserMapper;
 import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
+import com.example.fashionshop.modules.user.dto.StaffAccountResponse;
 import com.example.fashionshop.modules.user.dto.UpdateProfileRequest;
 import com.example.fashionshop.modules.user.dto.UserResponse;
 import com.example.fashionshop.modules.user.entity.User;
@@ -41,12 +43,15 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email already exists");
         }
+        if (request.getRole() == Role.CUSTOMER) {
+            throw new BadRequestException("Invalid role for staff account");
+        }
         User currentUser = getCurrentUser();
         User staff = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.STAFF)
+                .role(request.getRole())
                 .isActive(true)
                 .managedBy(currentUser)
                 .build();
@@ -56,6 +61,17 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<UserResponse> getStaffAccounts() {
         return userRepository.findByRole(Role.STAFF).stream().map(UserMapper::toResponse).toList();
+    }
+
+    @Override
+    public List<StaffAccountResponse> getAllStaffAccounts() {
+        try {
+            return userRepository.findByRoleOrderByIdDesc(Role.STAFF).stream()
+                    .map(this::toStaffAccountResponse)
+                    .toList();
+        } catch (Exception ex) {
+            throw new StaffAccountLoadException("Unable to load staff accounts", ex);
+        }
     }
 
     @Override
@@ -72,6 +88,16 @@ public class UserServiceImpl implements UserService {
         }
         user.setIsActive(false);
         userRepository.save(user);
+    }
+
+    private StaffAccountResponse toStaffAccountResponse(User user) {
+        return StaffAccountResponse.builder()
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .status(Boolean.TRUE.equals(user.getIsActive()) ? "ACTIVE" : "INACTIVE")
+                .build();
     }
 
     private User getCurrentUser() {
