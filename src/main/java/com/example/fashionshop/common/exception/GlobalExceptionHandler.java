@@ -90,6 +90,10 @@ public class GlobalExceptionHandler {
             return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
         }
 
+        if (errors.size() == 1 && errors.containsKey("quantity") && "Invalid quantity".equals(errors.get("quantity"))) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid quantity"));
+        }
+
         return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));
     }
 
