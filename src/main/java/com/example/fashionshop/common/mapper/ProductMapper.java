@@ -5,7 +5,9 @@ import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 public final class ProductMapper {
 
@@ -20,7 +22,7 @@ public final class ProductMapper {
                 .name(product.getName())
                 .description(product.getDescription())
                 .price(product.getPrice())
-                .imageUrl(product.getImageUrl())
+                .imageUrl(getPrimaryImageUrl(product.getImageUrl()))
                 .stockQuantity(product.getStockQuantity())
                 .isActive(product.getIsActive())
                 .manageDetailUrl("/api/products/manage/" + product.getId())
@@ -43,7 +45,7 @@ public final class ProductMapper {
                 .stockStatus(inStock ? "IN_STOCK" : "OUT_OF_STOCK")
                 .isActive(product.getIsActive())
                 .status(active ? "ACTIVE" : "INACTIVE")
-                .thumbnailUrl(product.getImageUrl())
+                .thumbnailUrl(getPrimaryImageUrl(product.getImageUrl()))
                 .detailUrl("/api/products/manage/" + product.getId())
                 .build();
     }
@@ -64,12 +66,26 @@ public final class ProductMapper {
                 .isActive(product.getIsActive())
                 .inStock(inStock)
                 .status(active ? (inStock ? "ACTIVE_IN_STOCK" : "ACTIVE_OUT_OF_STOCK") : "INACTIVE")
-                .imageUrls(product.getImageUrl() == null || product.getImageUrl().isBlank()
-                        ? Collections.emptyList()
-                        : Collections.singletonList(product.getImageUrl()))
+                .imageUrls(parseImageUrls(product.getImageUrl()))
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .build();
+    }
+
+    private static String getPrimaryImageUrl(String imageUrl) {
+        List<String> parsedUrls = parseImageUrls(imageUrl);
+        return parsedUrls.isEmpty() ? null : parsedUrls.get(0);
+    }
+
+    private static List<String> parseImageUrls(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        return Arrays.stream(imageUrl.split(","))
+                .map(String::trim)
+                .filter(url -> !url.isBlank())
+                .toList();
     }
 
 }
