@@ -605,6 +605,7 @@ public class OrderServiceImpl implements OrderService {
                 .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
+                .detailPath("/account/orders/" + order.getId())
                 .updatedAt(order.getUpdatedAt())
                 .build();
     }
