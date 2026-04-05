@@ -17,6 +17,7 @@ public class OrderResponse {
     private String receiverName;
     private String phone;
     private String shippingAddress;
+    private String cancellationReason;
     private LocalDateTime createdAt;
     private List<OrderItemResponse> items;
 }

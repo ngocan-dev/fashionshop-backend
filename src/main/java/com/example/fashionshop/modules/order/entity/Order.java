@@ -40,6 +40,9 @@ public class Order {
     @Column(name = "shipping_address", length = 255)
     private String shippingAddress;
 
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
