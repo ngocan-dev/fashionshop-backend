@@ -5,12 +5,17 @@ import com.example.fashionshop.common.exception.AccountDeletionException;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.CustomerAccountRetrievalException;
 import com.example.fashionshop.common.exception.InvalidAccountDeletionException;
+import com.example.fashionshop.common.exception.ProfileRetrievalException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.exception.StaffAccountLoadException;
+import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.common.mapper.UserMapper;
 import com.example.fashionshop.common.util.SecurityUtil;
+import com.example.fashionshop.modules.order.entity.Order;
+import com.example.fashionshop.modules.order.repository.OrderRepository;
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
 import com.example.fashionshop.modules.user.dto.CustomerAccountResponse;
+import com.example.fashionshop.modules.user.dto.CustomerProfileResponse;
 import com.example.fashionshop.modules.user.dto.StaffAccountResponse;
 import com.example.fashionshop.modules.user.dto.UpdateProfileRequest;
 import com.example.fashionshop.modules.user.dto.UserResponse;
@@ -18,6 +23,7 @@ import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
+import org.springframework.util.StringUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,19 +35,68 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserResponse getMyProfile() {
-        User user = getCurrentUser();
+        User user = getCurrentAuthenticatedUser();
         return UserMapper.toResponse(user);
     }
 
     @Override
     public UserResponse updateMyProfile(UpdateProfileRequest request) {
-        User user = getCurrentUser();
+        User user = getCurrentAuthenticatedUser();
         user.setFullName(request.getFullName());
         return UserMapper.toResponse(userRepository.save(user));
+    }
+
+    @Override
+    public CustomerProfileResponse getCurrentCustomerProfile() {
+        User user = getCurrentCustomerUser();
+
+        try {
+            List<Order> orders = orderRepository.findByUserOrderByCreatedAtDesc(user);
+            Order latestOrder = orders.isEmpty() ? null : orders.get(0);
+
+            return CustomerProfileResponse.builder()
+                    .personalInfo(CustomerProfileResponse.PersonalInfo.builder()
+                            .fullName(user.getFullName())
+                            .email(user.getEmail())
+                            .phoneNumber(latestOrder != null ? latestOrder.getPhone() : null)
+                            .dateOfBirth(null)
+                            .gender(null)
+                            .build())
+                    .accountInfo(CustomerProfileResponse.AccountInfo.builder()
+                            .accountId(user.getId())
+                            .accountRole(user.getRole() != null ? user.getRole().name() : null)
+                            .registrationDate(user.getCreatedAt())
+                            .accountStatus(Boolean.TRUE.equals(user.getIsActive()) ? "ACTIVE" : "INACTIVE")
+                            .build())
+                    .addressInfo(CustomerProfileResponse.AddressInfo.builder()
+                            .defaultShippingAddress(latestOrder != null ? latestOrder.getShippingAddress() : null)
+                            .billingAddress(null)
+                            .city(null)
+                            .districtOrState(null)
+                            .postalCode(null)
+                            .country(null)
+                            .build())
+                    .extras(CustomerProfileResponse.ProfileExtras.builder()
+                            .avatarUrl(null)
+                            .linkedLoginProvider(null)
+                            .newsletterSubscribed(null)
+                            .recentActivity(CustomerProfileResponse.RecentActivitySummary.builder()
+                                    .totalOrders(orders.size())
+                                    .lastOrderDate(latestOrder != null ? latestOrder.getCreatedAt() : null)
+                                    .lastOrderStatus(latestOrder != null && latestOrder.getStatus() != null
+                                            ? latestOrder.getStatus().name()
+                                            : null)
+                                    .build())
+                            .build())
+                    .build();
+        } catch (DataAccessException ex) {
+            throw new ProfileRetrievalException("Unable to load profile information", ex);
+        }
     }
 
     @Override
@@ -52,7 +107,7 @@ public class UserServiceImpl implements UserService {
         if (request.getRole() == Role.CUSTOMER) {
             throw new BadRequestException("Invalid role for staff account");
         }
-        User currentUser = getCurrentUser();
+        User currentUser = getCurrentAuthenticatedUser();
         User staff = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
@@ -183,9 +238,21 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    private User getCurrentUser() {
+    private User getCurrentAuthenticatedUser() {
         String email = SecurityUtil.getCurrentUsername();
+        if (!StringUtils.hasText(email)) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+    }
+
+    private User getCurrentCustomerUser() {
+        User user = getCurrentAuthenticatedUser();
+        if (user.getRole() != Role.CUSTOMER) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        return user;
     }
 }
