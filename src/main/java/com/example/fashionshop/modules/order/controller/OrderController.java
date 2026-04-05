@@ -2,6 +2,7 @@ package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -45,6 +46,14 @@ public class OrderController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<List<OrderResponse>> myOrders() {
         return ApiResponse.success("Orders fetched successfully", orderService.getMyOrders());
+    }
+
+    @GetMapping("/my/history")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<PaginationResponse<OrderSummaryResponse>> myOrderHistory(@Valid @ModelAttribute CustomerOrderHistoryQuery query) {
+        PaginationResponse<OrderSummaryResponse> response = orderService.getMyOrderHistory(query);
+        String message = response.getItems().isEmpty() ? "No order history available" : "Order history fetched successfully";
+        return ApiResponse.success(message, response);
     }
 
     @GetMapping("/my/{orderId}")
