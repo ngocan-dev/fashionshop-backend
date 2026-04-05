@@ -149,3 +149,79 @@ Header
 - API responses follow `{ success, message, data }` format.
 - Passwords are encoded with BCrypt.
 - JWT authentication is stateless.
+
+## Customer Add to Cart (UC-24)
+- **Endpoint:** `POST /api/cart/items`
+- **Role:** `CUSTOMER`
+- **Request body:**
+  ```json
+  {
+    "productId": 101,
+    "quantity": 2
+  }
+  ```
+- **Behavior:**
+  - Validates `quantity > 0` (message: `Invalid quantity`)
+  - Validates product exists and is active/in stock
+  - Merges quantity when the same product already exists in cart
+  - Validates requested quantity does not exceed stock (message: `Insufficient stock available`)
+  - Returns full cart payload with `totalItems` for instant cart badge updates
+
+### Cart badge/header integration sample
+Use either:
+- `GET /api/cart/summary` to fetch cart badge count only
+- or `POST /api/cart/items` response `data.totalItems` right after adding to cart
+
+Example add-to-cart success response:
+```json
+{
+  "success": true,
+  "message": "Added to cart successfully",
+  "data": {
+    "cartId": 12,
+    "totalItems": 5,
+    "distinctItemCount": 2,
+    "totalPrice": 319.95,
+    "items": [
+      {
+        "itemId": 41,
+        "productId": 101,
+        "productName": "Classic Shirt",
+        "price": 79.99,
+        "quantity": 3,
+        "lineTotal": 239.97
+      }
+    ]
+  }
+}
+```
+
+Frontend mapping recommendation for product detail page:
+1. Render quantity selector (`+`/`-` + numeric input).
+2. Disable **Add to cart** button while request is pending.
+3. On submit:
+   - if quantity invalid, show `Invalid quantity`
+   - if API returns stock conflict, show `Insufficient stock available`
+   - if API returns 500/cart update error, show `Unable to add item to cart`
+4. On success, show toast and update header badge with `data.totalItems`.
+## Customer Storefront Search (UC-22)
+- **Endpoint:** `GET /api/products/search?keyword=...`
+- **Role:** Public customer storefront endpoint.
+- **Purpose:** Search active products by product name, category/type, and description keyword.
+- **Behavior:**
+  - Trims incoming keyword
+  - Returns **top 5** most relevant products only
+  - Empty keyword -> `400` with message `Please enter a keyword`
+  - No matching products -> `200` with message `No results found` and empty array
+  - Query failure -> `500` with message `Unable to load search results`
+- **Search item fields:** id, slug, name, category/type, price, thumbnail, short description snippet, stock status, detail URL.
+
+Example storefront integration point (frontend header/navbar):
+```text
+Storefront Header
+├── Logo
+├── Category Menu
+├── Search Bar (Enter key or Search button)
+│   └── Calls GET /api/products/search?keyword={query}
+└── Cart Icon
+```
