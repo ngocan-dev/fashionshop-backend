@@ -61,6 +61,7 @@ public class GlobalExceptionHandler {
             AuthenticationSystemException.class,
             OrderCancellationException.class,
             StoreProductListLoadException.class,
+            CartLoadException.class,
             CartUpdateException.class,
             SearchResultLoadException.class
     })

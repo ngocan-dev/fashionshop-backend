@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.cart.service;
 
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.CartLoadException;
 import com.example.fashionshop.common.exception.CartUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -39,8 +40,12 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartResponse getMyCart() {
-        Cart cart = getOrCreateCart();
-        return buildCartResponse(cart);
+        try {
+            Cart cart = getOrCreateCart();
+            return buildCartResponse(cart);
+        } catch (DataAccessException ex) {
+            throw new CartLoadException("Unable to load cart items", ex);
+        }
     }
 
     @Override
