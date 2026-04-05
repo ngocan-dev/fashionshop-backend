@@ -39,6 +39,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(AccountCreationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
     @ExceptionHandler(AuthenticationSystemException.class)
     public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
