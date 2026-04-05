@@ -24,4 +24,8 @@ public interface UserService {
     List<CustomerAccountResponse> getAllCustomerAccounts();
 
     void deactivateUser(Integer userId);
+
+    void deleteAccountById(Long id, Boolean confirm);
+
+    void deleteAccountByEmail(String email, Boolean confirm);
 }
