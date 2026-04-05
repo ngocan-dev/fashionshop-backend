@@ -54,7 +54,7 @@ class ProductServiceImplManageDetailTest {
                 .updatedAt(LocalDateTime.of(2026, 2, 20, 11, 0))
                 .build();
 
-        when(productRepository.findById(7)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdAndIsActiveTrue(7)).thenReturn(Optional.of(product));
 
         ProductDetailResponse response = productService.getManageDetail(7);
 
@@ -71,14 +71,14 @@ class ProductServiceImplManageDetailTest {
 
     @Test
     void getManageDetail_shouldThrowNotFoundWhenProductMissing() {
-        when(productRepository.findById(999)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(999)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> productService.getManageDetail(999));
     }
 
     @Test
     void getManageDetail_shouldThrowLoadExceptionWhenRepositoryFails() {
-        when(productRepository.findById(12)).thenThrow(new RuntimeException("Database unavailable"));
+        when(productRepository.findByIdAndIsActiveTrue(12)).thenThrow(new RuntimeException("Database unavailable"));
 
         assertThrows(ProductDetailLoadException.class, () -> productService.getManageDetail(12));
     }

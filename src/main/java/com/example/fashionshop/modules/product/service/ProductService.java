@@ -3,6 +3,7 @@ package com.example.fashionshop.modules.product.service;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
+import com.example.fashionshop.modules.product.dto.ProductManageUpdateRequest;
 import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 
@@ -16,6 +17,8 @@ public interface ProductService {
     ProductResponse getDetail(Integer productId);
 
     ProductDetailResponse getManageDetail(Integer productId);
+
+    ProductDetailResponse updateManageProduct(Integer productId, ProductManageUpdateRequest request);
 
     PaginationResponse<ProductManageSummaryResponse> getManageProducts(int page, int size, String keyword);
 
