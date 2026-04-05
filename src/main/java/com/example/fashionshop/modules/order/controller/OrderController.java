@@ -10,6 +10,7 @@ import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
@@ -102,6 +103,18 @@ public class OrderController {
         return ApiResponse.success(
                 "Order detail fetched successfully",
                 orderService.getMyOrderDetail(orderId)
+        );
+    }
+
+
+    @GetMapping("/my/{orderId}/status")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<OrderStatusTrackingResponse> myOrderStatus(
+            @PathVariable @Positive Integer orderId) {
+
+        return ApiResponse.success(
+                "Order status fetched successfully",
+                orderService.getMyOrderTrackingStatus(orderId)
         );
     }
 

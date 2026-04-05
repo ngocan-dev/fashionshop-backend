@@ -75,6 +75,7 @@ public final class OrderMapper {
                         .createdAt(order.getCreatedAt())
                         .lastUpdatedAt(resolveLastUpdated(order, latestPayment))
                         .build())
+                .tracking(OrderTrackingMapper.toTrackingInfo(order))
                 .build();
     }
 

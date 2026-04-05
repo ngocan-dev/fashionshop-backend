@@ -9,6 +9,7 @@ import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
@@ -28,6 +29,8 @@ public interface OrderService {
     PaginationResponse<OrderSummaryResponse> getMyOrderHistory(CustomerOrderHistoryQuery query);
 
     OrderDetailResponse getMyOrderDetail(Integer orderId);
+
+    OrderStatusTrackingResponse getMyOrderTrackingStatus(Integer orderId);
 
     CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request);
 

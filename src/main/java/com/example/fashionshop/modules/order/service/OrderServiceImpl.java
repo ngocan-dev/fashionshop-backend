@@ -12,7 +12,9 @@ import com.example.fashionshop.common.exception.OrderPlacementException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.exception.UnauthorizedException;
+import com.example.fashionshop.common.exception.OrderStatusLoadException;
 import com.example.fashionshop.common.mapper.OrderMapper;
+import com.example.fashionshop.common.mapper.OrderTrackingMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.cart.entity.Cart;
@@ -31,6 +33,7 @@ import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
@@ -354,6 +357,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public OrderStatusTrackingResponse getMyOrderTrackingStatus(Integer orderId) {
+        try {
+            User user = getCurrentUser();
+            Order order = orderRepository.findByIdAndUserId(orderId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+            return buildOrderStatusTrackingResponse(order);
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderStatusLoadException(ex);
+        }
+    }
+
+    @Override
     @Transactional
     public CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request) {
         try {
@@ -472,6 +490,25 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception ex) {
             throw new OrderDetailLoadException(ex);
         }
+    }
+
+    private OrderStatusTrackingResponse buildOrderStatusTrackingResponse(Order order) {
+        Invoice invoice = invoiceRepository.findByOrder(order).orElse(null);
+        List<OrderItem> items = orderItemRepository.findByOrder(order);
+
+        return OrderStatusTrackingResponse.builder()
+                .summary(OrderSummaryResponse.builder()
+                        .id(order.getId())
+                        .orderId(order.getId())
+                        .orderCode(invoice != null ? invoice.getInvoiceNumber() : "ORD-" + order.getId())
+                        .orderDate(order.getCreatedAt())
+                        .orderStatus(order.getStatus())
+                        .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : ZERO)
+                        .itemCount(items.size())
+                        .updatedAt(order.getUpdatedAt())
+                        .build())
+                .tracking(OrderTrackingMapper.toTrackingInfo(order))
+                .build();
     }
 
     private CheckoutSummaryItemResponse toCheckoutItem(CartItem cartItem) {
@@ -669,6 +706,7 @@ public class OrderServiceImpl implements OrderService {
                 .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
+                .detailPath("/account/orders/" + order.getId())
                 .updatedAt(order.getUpdatedAt())
                 .build();
     }
