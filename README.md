@@ -125,3 +125,25 @@ Dashboard Sidebar
 - API responses follow `{ success, message, data }` format.
 - Passwords are encoded with BCrypt.
 - JWT authentication is stateless.
+
+## Customer Storefront Search (UC-22)
+- **Endpoint:** `GET /api/products/search?keyword=...`
+- **Role:** Public customer storefront endpoint.
+- **Purpose:** Search active products by product name, category/type, and description keyword.
+- **Behavior:**
+  - Trims incoming keyword
+  - Returns **top 5** most relevant products only
+  - Empty keyword -> `400` with message `Please enter a keyword`
+  - No matching products -> `200` with message `No results found` and empty array
+  - Query failure -> `500` with message `Unable to load search results`
+- **Search item fields:** id, slug, name, category/type, price, thumbnail, short description snippet, stock status, detail URL.
+
+Example storefront integration point (frontend header/navbar):
+```text
+Storefront Header
+├── Logo
+├── Category Menu
+├── Search Bar (Enter key or Search button)
+│   └── Calls GET /api/products/search?keyword={query}
+└── Cart Icon
+```
