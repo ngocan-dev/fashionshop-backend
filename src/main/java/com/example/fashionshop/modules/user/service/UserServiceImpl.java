@@ -2,10 +2,12 @@ package com.example.fashionshop.modules.user.service;
 
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.CustomerAccountRetrievalException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.UserMapper;
 import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
+import com.example.fashionshop.modules.user.dto.CustomerAccountResponse;
 import com.example.fashionshop.modules.user.dto.UpdateProfileRequest;
 import com.example.fashionshop.modules.user.dto.UserResponse;
 import com.example.fashionshop.modules.user.entity.User;
@@ -63,6 +65,18 @@ public class UserServiceImpl implements UserService {
         return userRepository.findByRole(Role.CUSTOMER).stream().map(UserMapper::toResponse).toList();
     }
 
+
+    @Override
+    public List<CustomerAccountResponse> getAllCustomerAccounts() {
+        try {
+            return userRepository.findByRoleOrderByIdDesc(Role.CUSTOMER).stream()
+                    .map(this::toCustomerAccountResponse)
+                    .toList();
+        } catch (Exception ex) {
+            throw new CustomerAccountRetrievalException("Unable to load customer accounts", ex);
+        }
+    }
+
     @Override
     public void deactivateUser(Integer userId) {
         User user = userRepository.findById(userId)
@@ -72,6 +86,17 @@ public class UserServiceImpl implements UserService {
         }
         user.setIsActive(false);
         userRepository.save(user);
+    }
+
+
+    private CustomerAccountResponse toCustomerAccountResponse(User user) {
+        return CustomerAccountResponse.builder()
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .status(Boolean.TRUE.equals(user.getIsActive()) ? "ACTIVE" : "INACTIVE")
+                .build();
     }
 
     private User getCurrentUser() {

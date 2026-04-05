@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.user.service;
 
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
+import com.example.fashionshop.modules.user.dto.CustomerAccountResponse;
 import com.example.fashionshop.modules.user.dto.UpdateProfileRequest;
 import com.example.fashionshop.modules.user.dto.UserResponse;
 
@@ -16,6 +17,8 @@ public interface UserService {
     List<UserResponse> getStaffAccounts();
 
     List<UserResponse> getCustomerAccounts();
+
+    List<CustomerAccountResponse> getAllCustomerAccounts();
 
     void deactivateUser(Integer userId);
 }
