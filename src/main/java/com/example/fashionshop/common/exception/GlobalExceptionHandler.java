@@ -26,7 +26,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(UnauthorizedException.class)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler({UnauthorizedException.class})
     public ResponseEntity<ApiResponse<Object>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
@@ -66,6 +71,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(InvoiceListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceListLoad(InvoiceListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvoiceDetailLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceDetailLoad(InvoiceDetailLoadException ex) {
+    @ExceptionHandler(OrderStatusUpdateException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOrderStatusUpdateFailure(OrderStatusUpdateException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ProductDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleProductDeletionFailure(ProductDeletionException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
@@ -76,24 +93,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(DashboardLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDashboardLoad(DashboardLoadException ex) {
+    @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
+            OrderListLoadException.class, OrderDetailLoadException.class, ProductDeletionException.class,
+            ProductUpdateException.class, DashboardLoadException.class, AccountDeletionException.class,
+            CustomerAccountRetrievalException.class, AuthenticationSystemException.class, OrderCancellationException.class})
+    public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(InvalidAccountDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidAccountDeletion(InvalidAccountDeletionException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(AccountDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccountDeletionFailure(AccountDeletionException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(CustomerAccountRetrievalException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCustomerAccountRetrieval(CustomerAccountRetrievalException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(AccountCreationException.class)
@@ -113,7 +123,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid order id"));
+        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request parameter"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -122,7 +132,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
-            if ("NotBlank".equals(error.getCode())) {
+            if ("NotBlank".equals(error.getCode()) || "NotNull".equals(error.getCode())) {
                 hasMissingRequiredField = true;
             }
         }
