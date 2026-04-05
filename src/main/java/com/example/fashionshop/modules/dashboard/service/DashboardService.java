@@ -1,7 +1,9 @@
 package com.example.fashionshop.modules.dashboard.service;
 
-import com.example.fashionshop.modules.dashboard.dto.DashboardSummaryResponse;
+import com.example.fashionshop.modules.dashboard.dto.DashboardResponse;
+
+import java.time.LocalDate;
 
 public interface DashboardService {
-    DashboardSummaryResponse getSummary();
+    DashboardResponse getDashboard(LocalDate from, LocalDate to);
 }
