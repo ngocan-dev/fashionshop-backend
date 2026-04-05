@@ -11,6 +11,8 @@ public interface InvoiceService {
 
     InvoiceResponse getById(Integer invoiceId);
 
+    InvoiceDetailResponse getMyInvoiceDetail(Integer invoiceId);
+
     PaginationResponse<InvoiceSummaryResponse> getManageInvoices(InvoiceListQuery query);
 
     InvoiceDetailResponse getManageInvoiceDetail(Integer invoiceId);

@@ -25,6 +25,7 @@ public class InvoiceSummaryResponse {
 
     private PaymentMethod paymentMethod;
     private String invoiceStatus;
+    private String detailPath;
     private LocalDateTime dueDate;
     private LocalDateTime updatedAt;
 }
