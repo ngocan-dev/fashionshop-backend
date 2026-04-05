@@ -3,14 +3,17 @@ package com.example.fashionshop.modules.order.controller;
 import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
+import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.service.OrderService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
+@Validated
 public class OrderController {
 
     private final OrderService orderService;
@@ -44,13 +48,13 @@ public class OrderController {
 
     @GetMapping("/my/{orderId}")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<OrderResponse> myOrderDetail(@PathVariable Integer orderId) {
+    public ApiResponse<OrderDetailResponse> myOrderDetail(@PathVariable @Positive Integer orderId) {
         return ApiResponse.success("Order detail fetched successfully", orderService.getMyOrderDetail(orderId));
     }
 
     @PatchMapping("/my/{orderId}/cancel")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<Void> cancelMyOrder(@PathVariable Integer orderId) {
+    public ApiResponse<Void> cancelMyOrder(@PathVariable @Positive Integer orderId) {
         orderService.cancelMyOrder(orderId);
         return ApiResponse.success("Order cancelled successfully", null);
     }
@@ -63,13 +67,19 @@ public class OrderController {
 
     @GetMapping("/manage/{orderId}")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<OrderResponse> orderDetail(@PathVariable Integer orderId) {
+    public ApiResponse<OrderDetailResponse> orderDetail(@PathVariable @Positive Integer orderId) {
+        return ApiResponse.success("Order detail fetched successfully", orderService.getOrderDetail(orderId));
+    }
+
+    @GetMapping("/{orderId}")
+    @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
+    public ApiResponse<OrderDetailResponse> orderDetailById(@PathVariable @Positive Integer orderId) {
         return ApiResponse.success("Order detail fetched successfully", orderService.getOrderDetail(orderId));
     }
 
     @PatchMapping("/manage/{orderId}/status")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<OrderResponse> updateStatus(@PathVariable Integer orderId,
+    public ApiResponse<OrderResponse> updateStatus(@PathVariable @Positive Integer orderId,
                                                    @Valid @RequestBody UpdateOrderStatusRequest request) {
         return ApiResponse.success("Order status updated successfully", orderService.updateOrderStatus(orderId, request));
     }

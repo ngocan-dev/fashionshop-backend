@@ -1,8 +1,10 @@
 package com.example.fashionshop.modules.product.controller;
 
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
+import com.example.fashionshop.common.exception.ProductDeletionException;
 import com.example.fashionshop.common.exception.ProductDetailLoadException;
 import com.example.fashionshop.common.exception.ProductListLoadException;
+import com.example.fashionshop.common.exception.ProductUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
@@ -21,8 +23,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -153,5 +159,110 @@ class AdminProductControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Unable to load product details"));
+    }
+
+    @Test
+    void deleteProduct_shouldDeleteProductSuccessfully() throws Exception {
+        mockMvc.perform(delete("/api/products/manage/101").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Product deleted successfully"));
+    }
+
+    @Test
+    void deleteProduct_shouldReturnNotFoundWhenProductDoesNotExist() throws Exception {
+        doThrow(new ResourceNotFoundException("Product not found")).when(productService).delete(9999);
+
+        mockMvc.perform(delete("/api/products/manage/9999").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Product not found"));
+    }
+
+    @Test
+    void deleteProduct_shouldReturnDeletionFailureMessageWhenDeleteFails() throws Exception {
+        doThrow(new ProductDeletionException()).when(productService).delete(101);
+
+        mockMvc.perform(delete("/api/products/manage/101").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Product deletion failed"));
+    void updateProduct_shouldReturnUpdatedProductForAdminOrStaff() throws Exception {
+        ProductDetailResponse updated = ProductDetailResponse.builder()
+                .id(101)
+                .productCode("SKU-101")
+                .name("Classic Blazer Updated")
+                .description("Updated description")
+                .categoryId(8)
+                .categoryName("Blazers")
+                .price(new BigDecimal("209.99"))
+                .stockQuantity(20)
+                .isActive(true)
+                .inStock(true)
+                .status("ACTIVE_IN_STOCK")
+                .imageUrls(List.of("https://cdn.example.com/products/101-main.jpg"))
+                .build();
+
+        when(productService.updateManageProduct(any(), any())).thenReturn(updated);
+
+        String payload = """
+                {
+                  "name": "Classic Blazer Updated",
+                  "description": "Updated description",
+                  "categoryId": 8,
+                  "price": 209.99,
+                  "stockQuantity": 20,
+                  "imageUrls": ["https://cdn.example.com/products/101-main.jpg"],
+                  "status": "ACTIVE"
+                }
+                """;
+
+        mockMvc.perform(put("/api/products/manage/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Product updated successfully"))
+                .andExpect(jsonPath("$.data.name").value("Classic Blazer Updated"));
+    }
+
+    @Test
+    void updateProduct_shouldReturnValidationErrorWhenRequiredFieldsMissing() throws Exception {
+        String invalidPayload = """
+                {
+                  "description": "Updated description",
+                  "price": -1,
+                  "stockQuantity": -2
+                }
+                """;
+
+        mockMvc.perform(put("/api/products/manage/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void updateProduct_shouldReturnProductUpdateFailedWhenServiceFails() throws Exception {
+        when(productService.updateManageProduct(any(), any())).thenThrow(new ProductUpdateException());
+
+        String payload = """
+                {
+                  "name": "Classic Blazer Updated",
+                  "description": "Updated description",
+                  "categoryId": 8,
+                  "price": 209.99,
+                  "stockQuantity": 20,
+                  "status": "ACTIVE"
+                }
+                """;
+
+        mockMvc.perform(put("/api/products/manage/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Product update failed"));
     }
 }

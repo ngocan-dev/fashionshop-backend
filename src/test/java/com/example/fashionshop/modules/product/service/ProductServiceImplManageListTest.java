@@ -52,7 +52,7 @@ class ProductServiceImplManageListTest {
                 .imageUrl("https://cdn.example.com/p5.jpg")
                 .build();
 
-        when(productRepository.findAll(PageRequest.of(0, 10)))
+        when(productRepository.findByIsActiveTrue(PageRequest.of(0, 10)))
                 .thenReturn(new PageImpl<>(List.of(product), PageRequest.of(0, 10), 1));
 
         PaginationResponse<ProductManageSummaryResponse> response = productService.getManageProducts(0, 10, null);
@@ -71,7 +71,7 @@ class ProductServiceImplManageListTest {
 
     @Test
     void getManageProducts_shouldThrowLoadExceptionWhenRepositoryFails() {
-        when(productRepository.findAll(PageRequest.of(0, 10))).thenThrow(new RuntimeException("db error"));
+        when(productRepository.findByIsActiveTrue(PageRequest.of(0, 10))).thenThrow(new RuntimeException("db error"));
 
         assertThrows(ProductListLoadException.class, () -> productService.getManageProducts(0, 10, null));
     }

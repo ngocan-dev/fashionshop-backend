@@ -25,4 +25,14 @@ public class OrderSummaryResponse {
     private Integer itemCount;
     private String shippingStatus;
     private LocalDateTime updatedAt;
+    private Integer orderId;
+    private String orderCode;
+    private LocalDateTime orderDate;
+    private OrderStatus orderStatus;
+    private String paymentStatus;
+    private String paymentMethod;
+    private BigDecimal totalAmount;
+    private BigDecimal subtotal;
+    private BigDecimal shippingFee;
+    private BigDecimal discountAmount;
 }
