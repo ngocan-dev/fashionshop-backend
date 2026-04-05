@@ -2,8 +2,11 @@ package com.example.fashionshop.modules.product.controller;
 
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
+import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.common.exception.StoreProductDetailLoadException;
 import com.example.fashionshop.common.exception.StoreProductListLoadException;
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.product.dto.StoreProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 import com.example.fashionshop.modules.product.service.ProductService;
 import org.junit.jupiter.api.Test;
@@ -105,4 +108,52 @@ class StoreProductControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Invalid pagination parameters"));
     }
+
+    @Test
+    void getDetail_shouldReturnStoreProductDetail() throws Exception {
+        StoreProductDetailResponse detail = StoreProductDetailResponse.builder()
+                .id(1)
+                .slug("product-1")
+                .name("Relaxed Linen Shirt")
+                .description("Premium linen shirt")
+                .price(new BigDecimal("39.99"))
+                .inStock(true)
+                .availabilityStatus("IN_STOCK")
+                .availabilityLabel("In stock")
+                .defaultQuantity(1)
+                .addToCartEnabled(true)
+                .buyNowEnabled(true)
+                .build();
+
+        when(productService.getStoreProductDetail("1")).thenReturn(detail);
+
+        mockMvc.perform(get("/api/store/products/1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Product details fetched successfully"))
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.defaultQuantity").value(1))
+                .andExpect(jsonPath("$.data.buyNowEnabled").value(true));
+    }
+
+    @Test
+    void getDetail_shouldReturnNotFoundWhenProductMissing() throws Exception {
+        when(productService.getStoreProductDetail("999")).thenThrow(new ResourceNotFoundException("Product not available"));
+
+        mockMvc.perform(get("/api/store/products/999").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Product not available"));
+    }
+
+    @Test
+    void getDetail_shouldReturnInternalServerErrorWhenServiceFails() throws Exception {
+        when(productService.getStoreProductDetail("1")).thenThrow(new StoreProductDetailLoadException());
+
+        mockMvc.perform(get("/api/store/products/1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load product details. Please try again"));
+    }
+
 }

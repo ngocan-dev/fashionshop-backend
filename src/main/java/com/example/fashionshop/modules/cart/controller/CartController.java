@@ -36,7 +36,13 @@ public class CartController {
     @PutMapping("/items/{itemId}")
     public ApiResponse<CartResponse> updateCartItem(@PathVariable Integer itemId,
                                                     @Valid @RequestBody UpdateCartItemRequest request) {
-        return ApiResponse.success("Cart item updated successfully", cartService.updateCartItem(itemId, request));
+        return ApiResponse.success("Cart item updated successfully", cartService.updateCartItemQuantity(itemId, request));
+    }
+
+    @PutMapping("/items/{itemId}/quantity")
+    public ApiResponse<CartResponse> updateCartItemQuantity(@PathVariable Integer itemId,
+                                                            @Valid @RequestBody UpdateCartItemRequest request) {
+        return ApiResponse.success("Cart item updated successfully", cartService.updateCartItemQuantity(itemId, request));
     }
 
     @DeleteMapping("/items/{itemId}")

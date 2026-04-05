@@ -9,6 +9,8 @@ public interface CartService {
 
     CartResponse addToCart(AddToCartRequest request);
 
+    CartResponse updateCartItemQuantity(Integer itemId, UpdateCartItemRequest request);
+
     CartResponse updateCartItem(Integer itemId, UpdateCartItemRequest request);
 
     CartResponse removeCartItem(Integer itemId);

@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.cart.service;
 
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.CartLoadException;
 import com.example.fashionshop.common.exception.CartUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -39,8 +40,12 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartResponse getMyCart() {
-        Cart cart = getOrCreateCart();
-        return buildCartResponse(cart);
+        try {
+            Cart cart = getOrCreateCart();
+            return buildCartResponse(cart);
+        } catch (DataAccessException ex) {
+            throw new CartLoadException("Unable to load cart items", ex);
+        }
     }
 
     @Override
@@ -57,18 +62,16 @@ public class CartServiceImpl implements CartService {
         validateStock(product, mergedQuantity);
 
         item.setQuantity(mergedQuantity);
-
-        try {
-            cartItemRepository.save(item);
-        } catch (DataAccessException ex) {
-            throw new CartUpdateException("Unable to add item to cart", ex);
-        }
-
-        return buildCartResponse(cart);
+        return persistAndBuildCart(cart, item, "Unable to add item to cart");
     }
 
     @Override
     public CartResponse updateCartItem(Integer itemId, UpdateCartItemRequest request) {
+        return updateCartItemQuantity(itemId, request);
+    }
+
+    @Override
+    public CartResponse updateCartItemQuantity(Integer itemId, UpdateCartItemRequest request) {
         validateCartItemId(itemId);
         validateQuantity(request.getQuantity());
 
@@ -78,13 +81,8 @@ public class CartServiceImpl implements CartService {
         Product product = findValidProduct(item.getProduct().getId());
         validateStock(product, request.getQuantity());
 
-        try {
-            item.setQuantity(request.getQuantity());
-            cartItemRepository.save(item);
-            return buildCartResponse(cart);
-        } catch (DataAccessException ex) {
-            throw new CartUpdateException("Unable to update cart", ex);
-        }
+        item.setQuantity(request.getQuantity());
+        return persistAndBuildCart(cart, item, "Unable to update cart");
     }
 
     @Override
@@ -99,6 +97,15 @@ public class CartServiceImpl implements CartService {
             return buildCartResponse(cart);
         } catch (DataAccessException ex) {
             throw new CartUpdateException("Unable to update cart", ex);
+        }
+    }
+
+    private CartResponse persistAndBuildCart(Cart cart, CartItem item, String fallbackErrorMessage) {
+        try {
+            cartItemRepository.save(item);
+            return buildCartResponse(cart);
+        } catch (DataAccessException ex) {
+            throw new CartUpdateException(fallbackErrorMessage, ex);
         }
     }
 

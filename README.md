@@ -204,6 +204,50 @@ Frontend mapping recommendation for product detail page:
    - if API returns stock conflict, show `Insufficient stock available`
    - if API returns 500/cart update error, show `Unable to add item to cart`
 4. On success, show toast and update header badge with `data.totalItems`.
+
+## Customer Adjust Quantity In Cart (UC-27)
+- **Endpoints:** `PUT /api/cart/items/{itemId}` or `PUT /api/cart/items/{itemId}/quantity`
+- **Role:** `CUSTOMER`
+- **Request body:**
+  ```json
+  {
+    "quantity": 3
+  }
+  ```
+- **Behavior:**
+  - Validates `quantity > 0` (message: `Invalid quantity`)
+  - Validates product still active and checks stock availability
+  - If quantity exceeds stock, returns `Insufficient stock available`
+  - Recalculates line subtotal + cart totals and returns updated cart state
+  - Cart page can stay in place and immediately rerender totals/header badge from `data`
+
+Example response highlights:
+- `data.items[].quantity` for each row quantity selector
+- `data.items[].lineTotal` for per-item subtotal updates
+- `data.subtotal` and `data.totalPrice` for cart summary updates
+- `data.totalItems` for header cart badge sync
+## Customer View Cart (UC-26)
+- **Cart page endpoint:** `GET /api/cart`
+- **Cart badge count endpoint:** `GET /api/cart/summary`
+- **Role:** `CUSTOMER`
+- **Purpose:** Return active cart items and summary data for the dedicated cart page while keeping header badge sync-ready.
+- **Response payload (`data`):**
+  - `items[]` with `productImage`, `productName`, `quantity`, `price`, `lineTotal`
+  - `subtotal`, `totalPrice`, `totalItems`, `distinctItemCount`, `empty`
+- **Typical responses:**
+  - Success with items: message `Cart fetched successfully`
+  - Empty cart state: `empty: true` (frontend shows `Your cart is empty`)
+  - Retrieval failure: message `Unable to load cart items`
+
+Example storefront integration wiring (frontend):
+```text
+Storefront Header
+└── Cart Icon -> /cart
+    ├── Cart Page calls GET /api/cart
+    ├── Renders item image/name/qty/price/line total
+    ├── Renders subtotal + total and Checkout/Buy Now CTA
+    └── Uses empty + message states for fallback UI
+```
 ## Customer Storefront Search (UC-22)
 - **Endpoint:** `GET /api/products/search?keyword=...`
 - **Role:** Public customer storefront endpoint.
