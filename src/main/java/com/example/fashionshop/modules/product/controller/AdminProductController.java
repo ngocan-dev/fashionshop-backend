@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 @RestController
 @RequestMapping("/api/products/manage")
@@ -41,6 +42,10 @@ public class AdminProductController {
         return ApiResponse.success("Product detail fetched successfully", productService.getManageDetail(id));
     }
 
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> deleteProduct(@PathVariable Integer id) {
+        productService.delete(id);
+        return ApiResponse.success("Product deleted successfully", null);
     @PutMapping("/{id}")
     public ApiResponse<ProductDetailResponse> updateProduct(
             @PathVariable Integer id,

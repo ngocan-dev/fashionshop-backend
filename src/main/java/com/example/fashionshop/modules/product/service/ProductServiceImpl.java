@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.product.service;
 
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.ProductDeletionException;
 import com.example.fashionshop.common.exception.ProductDetailLoadException;
 import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ProductUpdateException;
@@ -78,15 +79,24 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public void delete(Integer productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
-        product.setIsActive(false);
-        productRepository.save(product);
+        if (productId == null || productId <= 0) {
+            throw new BadRequestException("Invalid product id");
+        }
+
+        try {
+            Product product = productRepository.findByIdAndIsActiveTrue(productId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+            deactivateProduct(product);
+        } catch (BadRequestException | ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ProductDeletionException();
+        }
     }
 
     @Override
     public ProductResponse getDetail(Integer productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdAndIsActiveTrue(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
         return ProductMapper.toResponse(product);
     }
@@ -98,7 +108,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         try {
-            Product product = productRepository.findById(productId)
+            Product product = productRepository.findByIdAndIsActiveTrue(productId)
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
             return ProductMapper.toDetailResponse(product);
         } catch (ResourceNotFoundException ex) {
@@ -147,8 +157,8 @@ public class ProductServiceImpl implements ProductService {
 
         try {
             Page<Product> result = (keyword == null || keyword.isBlank())
-                    ? productRepository.findAll(PageRequest.of(page, size))
-                    : productRepository.findByNameContainingIgnoreCase(keyword, PageRequest.of(page, size));
+                    ? productRepository.findByIsActiveTrue(PageRequest.of(page, size))
+                    : productRepository.findByIsActiveTrueAndNameContainingIgnoreCase(keyword, PageRequest.of(page, size));
 
             return PaginationResponse.<ProductManageSummaryResponse>builder()
                     .items(result.getContent().stream().map(ProductMapper::toManageSummaryResponse).toList())
@@ -185,6 +195,9 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
+    private void deactivateProduct(Product product) {
+        product.setIsActive(false);
+        productRepository.save(product);
     private String serializeImageUrls(List<String> imageUrls) {
         if (imageUrls == null) {
             return null;
