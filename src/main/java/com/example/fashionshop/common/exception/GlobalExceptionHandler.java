@@ -67,7 +67,8 @@ public class GlobalExceptionHandler {
             SearchResultLoadException.class,
             StoreProductDetailLoadException.class,
             OrderPlacementException.class,
-            PaymentStatusLoadException.class
+            PaymentStatusLoadException.class,
+            OrderStatusLoadException.class
     })
     public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

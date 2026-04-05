@@ -12,4 +12,5 @@ public class OrderDetailResponse {
     private OrderCustomerInfoResponse customer;
     private List<OrderDetailItemResponse> items;
     private OrderAdditionalInfoResponse additionalInfo;
+    private OrderTrackingInfoResponse tracking;
 }
