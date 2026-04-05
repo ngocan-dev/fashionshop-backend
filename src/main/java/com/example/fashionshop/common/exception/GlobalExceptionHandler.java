@@ -86,24 +86,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(DashboardLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDashboardLoad(DashboardLoadException ex) {
+    @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
+            OrderListLoadException.class, OrderDetailLoadException.class, ProductDeletionException.class,
+            ProductUpdateException.class, DashboardLoadException.class, AccountDeletionException.class,
+            CustomerAccountRetrievalException.class, AuthenticationSystemException.class, OrderCancellationException.class})
+    public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(InvalidAccountDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidAccountDeletion(InvalidAccountDeletionException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(AccountDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccountDeletionFailure(AccountDeletionException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(CustomerAccountRetrievalException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCustomerAccountRetrieval(CustomerAccountRetrievalException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(AccountCreationException.class)

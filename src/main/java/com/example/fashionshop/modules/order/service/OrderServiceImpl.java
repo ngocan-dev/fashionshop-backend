@@ -133,7 +133,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderDetailResponse getMyOrderDetail(Integer orderId) {
         User user = getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to access this order");
         }
@@ -144,7 +144,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void cancelMyOrder(Integer orderId) {
         User user = getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to cancel this order");
         }
@@ -295,14 +295,15 @@ public class OrderServiceImpl implements OrderService {
 
         return OrderSummaryResponse.builder()
                 .id(order.getId())
+                .orderId(order.getId())
                 .orderCode(invoice != null ? invoice.getInvoiceNumber() : "ORD-" + order.getId())
                 .customerName(order.getUser() != null ? order.getUser().getFullName() : order.getReceiverName())
                 .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
                 .customerPhone(order.getPhone())
                 .orderDate(order.getCreatedAt())
                 .orderStatus(order.getStatus())
-                .paymentStatus(payment != null ? payment.getPaymentStatus() : PaymentStatus.UNPAID)
-                .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
+                .paymentStatus(payment != null ? payment.getPaymentStatus().name() : PaymentStatus.UNPAID.name())
+                .paymentMethod(payment != null && payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
                 .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
@@ -320,6 +321,10 @@ public class OrderServiceImpl implements OrderService {
             case DELIVERED, COMPLETED -> "DELIVERED";
             case CANCELLED -> "CANCELLED";
         };
+    }
+
+    private Order getOrderOrThrow(Integer orderId) {
+        return orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
     }
 
     private User getCurrentUser() {
