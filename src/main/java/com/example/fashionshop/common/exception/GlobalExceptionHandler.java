@@ -57,6 +57,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(OrderListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOrderListLoad(OrderListLoadException ex) {
 
     @ExceptionHandler(OrderDetailLoadException.class)
     public ResponseEntity<ApiResponse<Object>> handleOrderDetailLoad(OrderDetailLoadException ex) {

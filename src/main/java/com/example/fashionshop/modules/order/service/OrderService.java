@@ -1,7 +1,10 @@
 package com.example.fashionshop.modules.order.service;
 
+import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
+import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 
@@ -18,6 +21,9 @@ public interface OrderService {
 
     List<OrderResponse> getAllOrders();
 
+    PaginationResponse<OrderSummaryResponse> getManageOrderSummaries(OrderListQuery query);
+
+    OrderResponse getOrderDetail(Integer orderId);
     OrderDetailResponse getOrderDetail(Integer orderId);
 
     OrderResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request);

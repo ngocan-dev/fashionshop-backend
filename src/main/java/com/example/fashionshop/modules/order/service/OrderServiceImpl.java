@@ -1,10 +1,13 @@
 package com.example.fashionshop.modules.order.service;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.OrderListLoadException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
+import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.cart.entity.Cart;
 import com.example.fashionshop.modules.cart.entity.CartItem;
@@ -14,23 +17,32 @@ import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
 import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
+import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
+import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.entity.Order;
 import com.example.fashionshop.modules.order.entity.OrderItem;
 import com.example.fashionshop.modules.order.repository.OrderItemRepository;
 import com.example.fashionshop.modules.order.repository.OrderRepository;
+import com.example.fashionshop.modules.payment.entity.Payment;
+import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.product.entity.Product;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import static com.example.fashionshop.common.enums.InvoicePaymentStatus.PENDING;
@@ -144,6 +156,32 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public PaginationResponse<OrderSummaryResponse> getManageOrderSummaries(OrderListQuery query) {
+        try {
+            Sort sort = resolveSort(query.getSortBy(), query.getSortDir());
+            PageRequest pageRequest = PageRequest.of(query.getPage(), query.getSize(), sort);
+            Page<Order> orderPage = orderRepository.findAll(buildManageOrderSpecification(query), pageRequest);
+
+            List<OrderSummaryResponse> items = orderPage.getContent().stream()
+                    .map(this::toOrderSummaryResponse)
+                    .toList();
+
+            return PaginationResponse.<OrderSummaryResponse>builder()
+                    .items(items)
+                    .page(orderPage.getNumber())
+                    .size(orderPage.getSize())
+                    .totalItems(orderPage.getTotalElements())
+                    .totalPages(orderPage.getTotalPages())
+                    .build();
+        } catch (OrderListLoadException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderListLoadException("Failed to load order list");
+        }
+    }
+
+    @Override
+    public OrderResponse getOrderDetail(Integer orderId) {
     public OrderDetailResponse getOrderDetail(Integer orderId) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return buildOrderDetailResponse(order);
@@ -179,6 +217,72 @@ public class OrderServiceImpl implements OrderService {
         if (current == OrderStatus.CANCELLED || current == OrderStatus.COMPLETED) {
             throw new BadRequestException("Invalid status transition from " + current + " to " + next);
         }
+    }
+
+    private Sort resolveSort(String sortBy, String sortDir) {
+        String normalizedSortBy = sortBy == null ? "createdAt" : sortBy;
+        String safeSortBy = switch (normalizedSortBy) {
+            case "id", "status", "totalPrice", "createdAt", "updatedAt" -> normalizedSortBy;
+            default -> "createdAt";
+        };
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, safeSortBy);
+    }
+
+    private Specification<Order> buildManageOrderSpecification(OrderListQuery query) {
+        return (root, criteriaQuery, criteriaBuilder) -> {
+            var predicates = criteriaBuilder.conjunction();
+            if (query.getStatus() != null) {
+                predicates.getExpressions().add(criteriaBuilder.equal(root.get("status"), query.getStatus()));
+            }
+
+            if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
+                String keyword = "%" + query.getKeyword().trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.getExpressions().add(
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("receiverName")), keyword),
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("phone")), keyword),
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("fullName")), keyword),
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("email")), keyword)
+                        )
+                );
+            }
+            return predicates;
+        };
+    }
+
+    private OrderSummaryResponse toOrderSummaryResponse(Order order) {
+        Invoice invoice = invoiceRepository.findByOrder(order).orElse(null);
+        Payment payment = paymentRepository.findTopByOrderOrderByIdDesc(order).orElse(null);
+        List<OrderItem> items = orderItemRepository.findByOrder(order);
+
+        return OrderSummaryResponse.builder()
+                .id(order.getId())
+                .orderCode(invoice != null ? invoice.getInvoiceNumber() : "ORD-" + order.getId())
+                .customerName(order.getUser() != null ? order.getUser().getFullName() : order.getReceiverName())
+                .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
+                .customerPhone(order.getPhone())
+                .orderDate(order.getCreatedAt())
+                .orderStatus(order.getStatus())
+                .paymentStatus(payment != null ? payment.getPaymentStatus() : PaymentStatus.UNPAID)
+                .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
+                .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO)
+                .itemCount(items.size())
+                .shippingStatus(formatShippingStatus(order.getStatus()))
+                .updatedAt(order.getUpdatedAt())
+                .build();
+    }
+
+    private String formatShippingStatus(OrderStatus orderStatus) {
+        if (orderStatus == null) {
+            return "UNKNOWN";
+        }
+        return switch (orderStatus) {
+            case PENDING, CONFIRMED -> "PREPARING";
+            case SHIPPING -> "IN_TRANSIT";
+            case COMPLETED -> "DELIVERED";
+            case CANCELLED -> "CANCELLED";
+        };
     }
 
     private User getCurrentUser() {
