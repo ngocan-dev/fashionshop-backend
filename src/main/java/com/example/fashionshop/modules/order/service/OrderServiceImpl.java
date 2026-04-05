@@ -2,6 +2,7 @@ package com.example.fashionshop.modules.order.service;
 
 import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -11,7 +12,9 @@ import com.example.fashionshop.modules.cart.repository.CartItemRepository;
 import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
+import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
+import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
@@ -42,6 +45,7 @@ public class OrderServiceImpl implements OrderService {
     private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
     private final InvoiceRepository invoiceRepository;
+    private final PaymentRepository paymentRepository;
     private final NotificationService notificationService;
 
     @Override
@@ -108,13 +112,13 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponse getMyOrderDetail(Integer orderId) {
+    public OrderDetailResponse getMyOrderDetail(Integer orderId) {
         User user = getCurrentUser();
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to access this order");
         }
-        return OrderMapper.toResponse(order, orderItemRepository.findByOrder(order));
+        return buildOrderDetailResponse(order);
     }
 
     @Override
@@ -140,9 +144,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponse getOrderDetail(Integer orderId) {
+    public OrderDetailResponse getOrderDetail(Integer orderId) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        return OrderMapper.toResponse(order, orderItemRepository.findByOrder(order));
+        return buildOrderDetailResponse(order);
     }
 
     @Override
@@ -153,6 +157,22 @@ public class OrderServiceImpl implements OrderService {
         order.setManagedBy(getCurrentUser());
         Order saved = orderRepository.save(order);
         return OrderMapper.toResponse(saved, orderItemRepository.findByOrder(saved));
+    }
+
+
+    private OrderDetailResponse buildOrderDetailResponse(Order order) {
+        try {
+            return OrderMapper.toDetailResponse(
+                    order,
+                    orderItemRepository.findByOrder(order),
+                    invoiceRepository.findByOrder(order),
+                    paymentRepository.findTopByOrderOrderByIdDesc(order)
+            );
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderDetailLoadException(ex);
+        }
     }
 
     private void validateTransition(OrderStatus current, OrderStatus next) {
