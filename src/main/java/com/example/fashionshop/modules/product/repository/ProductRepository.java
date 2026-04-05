@@ -1,4 +1,4 @@
-ackage com.example.fashionshop.modules.product.repository;
+package com.example.fashionshop.modules.product.repository;
 
 import com.example.fashionshop.modules.product.entity.Product;
 import org.springframework.data.domain.Page;
