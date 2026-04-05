@@ -1,10 +1,12 @@
 package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderStatusLoadException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
@@ -13,8 +15,13 @@ import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
+import com.example.fashionshop.modules.order.dto.OrderTrackingInfoResponse;
+import com.example.fashionshop.modules.order.dto.OrderTrackingStepResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
+import com.example.fashionshop.modules.payment.service.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +40,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,6 +57,9 @@ class OrderControllerTest {
 
     @MockBean
     private OrderService orderService;
+
+    @MockBean
+    private PaymentService paymentService;
 
     @Test
     void orderDetailById_shouldReturnOrderDetailsForAdminOrStaff() throws Exception {
@@ -118,6 +129,7 @@ class OrderControllerTest {
                         .totalAmount(new BigDecimal("320.00"))
                         .itemCount(2)
                         .shippingStatus("PREPARING")
+                        .detailPath("/account/orders/1001")
                         .updatedAt(LocalDateTime.of(2026, 3, 21, 12, 0))
                         .build()))
                 .page(0)
@@ -134,6 +146,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.message").value("Order history fetched successfully"))
                 .andExpect(jsonPath("$.data.items[0].orderId").value(1001))
                 .andExpect(jsonPath("$.data.items[0].totalAmount").value(320.00))
+                .andExpect(jsonPath("$.data.items[0].detailPath").value("/account/orders/1001"))
                 .andExpect(jsonPath("$.data.items[0].orderStatus").value("confirmed"));
     }
 
@@ -164,6 +177,60 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Unable to load order history"));
+    }
+
+
+    @Test
+    void myOrderStatus_shouldReturnTrackingStatus() throws Exception {
+        OrderStatusTrackingResponse response = OrderStatusTrackingResponse.builder()
+                .summary(OrderSummaryResponse.builder()
+                        .orderId(1001)
+                        .orderCode("INV-AB12CD34")
+                        .orderStatus(OrderStatus.PROCESSING)
+                        .orderDate(LocalDateTime.of(2026, 4, 2, 9, 0))
+                        .build())
+                .tracking(OrderTrackingInfoResponse.builder()
+                        .currentStatus(OrderStatus.PROCESSING)
+                        .progressSteps(List.of(OrderTrackingStepResponse.builder()
+                                .code("processing")
+                                .label("Processing")
+                                .completed(true)
+                                .current(true)
+                                .updatedAt(LocalDateTime.of(2026, 4, 3, 10, 0))
+                                .build()))
+                        .statusHistory(List.of())
+                        .build())
+                .build();
+
+        when(orderService.getMyOrderTrackingStatus(1001)).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/my/1001/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order status fetched successfully"))
+                .andExpect(jsonPath("$.data.summary.orderId").value(1001))
+                .andExpect(jsonPath("$.data.tracking.currentStatus").value("processing"));
+    }
+
+    @Test
+    void myOrderStatus_shouldReturnNotFoundWhenOrderDoesNotExist() throws Exception {
+        when(orderService.getMyOrderTrackingStatus(9999))
+                .thenThrow(new ResourceNotFoundException("Order not found"));
+
+        mockMvc.perform(get("/api/orders/my/9999/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Order not found"));
+    }
+
+    @Test
+    void myOrderStatus_shouldReturnFailureMessageWhenServiceErrors() throws Exception {
+        when(orderService.getMyOrderTrackingStatus(1001)).thenThrow(new OrderStatusLoadException());
+
+        mockMvc.perform(get("/api/orders/my/1001/status").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load order status"));
     }
 
     @Test
@@ -212,6 +279,44 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Order status update failed"));
+    }
+
+    @Test
+    void updateCheckoutPaymentMethod_shouldSaveSelectedMethod() throws Exception {
+        CheckoutSummaryResponse response = CheckoutSummaryResponse.builder()
+                .cartId(7)
+                .empty(false)
+                .message("Checkout summary fetched successfully")
+                .availablePaymentMethods(List.of(PaymentMethod.COD, PaymentMethod.BANKING))
+                .selectedPaymentMethod(PaymentMethod.COD)
+                .items(List.of())
+                .totalItems(2)
+                .distinctItemCount(1)
+                .subtotal(new BigDecimal("120.00"))
+                .shippingFee(BigDecimal.ZERO)
+                .discountAmount(BigDecimal.ZERO)
+                .finalTotal(new BigDecimal("120.00"))
+                .build();
+
+        when(orderService.updateCheckoutPaymentMethod(any())).thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/checkout/payment-method")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("paymentMethod", "COD"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Payment method selected successfully"))
+                .andExpect(jsonPath("$.data.selectedPaymentMethod").value("COD"));
+    }
+
+    @Test
+    void updateCheckoutPaymentMethod_shouldReturnValidationMessageWhenMissingPaymentMethod() throws Exception {
+        mockMvc.perform(patch("/api/orders/checkout/payment-method")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Please fill in all required fields"));
     }
 
     @Test

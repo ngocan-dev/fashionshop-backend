@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.payment.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
+import com.example.fashionshop.modules.payment.dto.CustomerPaymentStatusResponse;
 import com.example.fashionshop.modules.payment.dto.PaymentRequest;
 import com.example.fashionshop.modules.payment.dto.PaymentResponse;
 import com.example.fashionshop.modules.payment.service.PaymentService;
@@ -34,5 +35,14 @@ public class PaymentController {
     @GetMapping("/orders/{orderId}")
     public ApiResponse<PaymentResponse> getPaymentStatus(@PathVariable @Positive Integer orderId) {
         return ApiResponse.success("Payment status fetched successfully", paymentService.getPaymentStatus(orderId));
+    }
+
+    @GetMapping("/orders/{orderId}/summary")
+    public ApiResponse<CustomerPaymentStatusResponse> getCustomerPaymentStatus(@PathVariable Integer orderId) {
+        CustomerPaymentStatusResponse response = paymentService.getCustomerPaymentStatus(orderId);
+        if (!response.isPaymentInfoAvailable()) {
+            return ApiResponse.success("Payment information not available", response);
+        }
+        return ApiResponse.success("Payment status fetched successfully", response);
     }
 }

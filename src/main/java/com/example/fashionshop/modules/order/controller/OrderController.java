@@ -10,10 +10,14 @@ import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
+import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
+import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
+import com.example.fashionshop.modules.payment.dto.CustomerPaymentStatusResponse;
+import com.example.fashionshop.modules.payment.service.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +34,7 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final PaymentService paymentService;
 
     @GetMapping("/checkout-summary")
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -45,6 +50,16 @@ public class OrderController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<OrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         return ApiResponse.success("Order placed successfully", orderService.placeOrder(request));
+    }
+
+    @PatchMapping("/checkout/payment-method")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CheckoutSummaryResponse> updateCheckoutPaymentMethod(
+            @Valid @RequestBody UpdateCheckoutPaymentMethodRequest request) {
+        return ApiResponse.success(
+                "Payment method selected successfully",
+                orderService.updateCheckoutPaymentMethod(request)
+        );
     }
 
     @GetMapping
@@ -91,6 +106,33 @@ public class OrderController {
         return ApiResponse.success(
                 "Order detail fetched successfully",
                 orderService.getMyOrderDetail(orderId)
+        );
+    }
+
+    // ✅ Payment status
+    @GetMapping("/my/{orderId}/payment")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CustomerPaymentStatusResponse> myOrderPaymentStatus(
+            @PathVariable @Positive Integer orderId) {
+
+        CustomerPaymentStatusResponse response = paymentService.getCustomerPaymentStatus(orderId);
+
+        if (!response.isPaymentInfoAvailable()) {
+            return ApiResponse.success("Payment information not available", response);
+        }
+
+        return ApiResponse.success("Payment status fetched successfully", response);
+    }
+
+    // ✅ Order tracking status
+    @GetMapping("/my/{orderId}/status")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<OrderStatusTrackingResponse> myOrderStatus(
+            @PathVariable @Positive Integer orderId) {
+
+        return ApiResponse.success(
+                "Order status fetched successfully",
+                orderService.getMyOrderTrackingStatus(orderId)
         );
     }
 
