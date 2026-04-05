@@ -26,15 +26,64 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(UnauthorizedException.class)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler({UnauthorizedException.class})
     public ResponseEntity<ApiResponse<Object>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({ForbiddenException.class, AccessDeniedException.class})
-    public ResponseEntity<ApiResponse<Object>> handleForbidden(Exception ex) {
-        String message = ex instanceof AccessDeniedException ? "Access denied" : ex.getMessage();
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(message));
+    @ExceptionHandler({ForbiddenException.class})
+    public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
+    }
+
+    @ExceptionHandler(HomeDataLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleHomeDataLoad(HomeDataLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductDetailLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleProductDetailLoad(ProductDetailLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleProductListLoad(ProductListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(OrderListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOrderListLoad(OrderListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(OrderDetailLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOrderDetailLoad(OrderDetailLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(OrderStatusUpdateException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOrderStatusUpdateFailure(OrderStatusUpdateException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductDeletionException.class)
+    public ResponseEntity<ApiResponse<Object>> handleProductDeletionFailure(ProductDeletionException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductUpdateException.class)
+    public ResponseEntity<ApiResponse<Object>> handleProductUpdate(ProductUpdateException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
@@ -53,6 +102,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountCreationException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AuthenticationSystemException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

@@ -2,14 +2,13 @@ package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
-import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
+import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
-import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
-import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
+import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -79,17 +78,17 @@ public class OrderController {
         return ApiResponse.success("Order detail fetched successfully", orderService.getOrderDetail(orderId));
     }
 
-    @PatchMapping("/manage/{orderId}/status")
+    @PatchMapping("/{orderId}/status")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<OrderResponse> updateStatus(@PathVariable @Positive Integer orderId,
-                                                   @Valid @RequestBody UpdateOrderStatusRequest request) {
+    public ApiResponse<UpdateOrderStatusResponse> updateStatus(@PathVariable @Positive Integer orderId,
+                                                               @Valid @RequestBody UpdateOrderStatusRequest request) {
         return ApiResponse.success("Order status updated successfully", orderService.updateOrderStatus(orderId, request));
     }
 
-    @PatchMapping("/manage/{orderId}/cancel")
+    @PatchMapping("/manage/{orderId}/status")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<CancelOrderResponse> cancelOrder(@PathVariable @Positive Integer orderId,
-                                                        @Valid @RequestBody CancelOrderRequest request) {
-        return ApiResponse.success("Order cancelled successfully", orderService.cancelOrder(orderId, request));
+    public ApiResponse<UpdateOrderStatusResponse> updateManageStatus(@PathVariable @Positive Integer orderId,
+                                                                     @Valid @RequestBody UpdateOrderStatusRequest request) {
+        return updateStatus(orderId, request);
     }
 }

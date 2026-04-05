@@ -3,9 +3,9 @@ package com.example.fashionshop.modules.order.service;
 import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
-import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
@@ -17,14 +17,13 @@ import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
-import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
-import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
+import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.entity.Order;
 import com.example.fashionshop.modules.order.entity.OrderItem;
 import com.example.fashionshop.modules.order.repository.OrderItemRepository;
@@ -43,8 +42,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.example.fashionshop.common.enums.InvoicePaymentStatus.PENDING;
@@ -52,6 +55,8 @@ import static com.example.fashionshop.common.enums.InvoicePaymentStatus.PENDING;
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
+
+    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = buildAllowedTransitions();
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -143,7 +148,7 @@ public class OrderServiceImpl implements OrderService {
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to cancel this order");
         }
-        if (order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.COMPLETED) {
+        if (EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED).contains(order.getStatus())) {
             throw new BadRequestException("Cannot cancel this order in current status");
         }
         order.setStatus(OrderStatus.CANCELLED);
@@ -184,51 +189,41 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderDetailResponse getOrderDetail(Integer orderId) {
-        Order order = getOrderOrThrow(orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return buildOrderDetailResponse(order);
     }
 
     @Override
     @Transactional
-    public OrderResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request) {
-        Order order = getOrderOrThrow(orderId);
-        validateTransition(order.getStatus(), request.getStatus());
-        order.setStatus(request.getStatus());
-        order.setManagedBy(getCurrentUser());
-        Order saved = orderRepository.save(order);
-        return OrderMapper.toResponse(saved, orderItemRepository.findByOrder(saved));
-    }
-
-    @Override
-    @Transactional
-    public CancelOrderResponse cancelOrder(Integer orderId, CancelOrderRequest request) {
-        Order order = getOrderOrThrow(orderId);
-
-        if (!isCancellableByStaff(order.getStatus())) {
-            throw new BadRequestException("Order cannot be cancelled");
-        }
-
+    public UpdateOrderStatusResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request) {
         try {
-            order.setStatus(OrderStatus.CANCELLED);
-            order.setCancellationReason(request.getReason().trim());
-            order.setManagedBy(getCurrentUser());
-            Order savedOrder = orderRepository.save(order);
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-            return CancelOrderResponse.builder()
-                    .orderId(savedOrder.getId())
-                    .status(savedOrder.getStatus())
-                    .cancellationReason(savedOrder.getCancellationReason())
-                    .updatedAt(savedOrder.getUpdatedAt())
+            OrderStatus nextStatus = request.getStatus();
+            OrderStatus currentStatus = order.getStatus();
+            validateTransition(currentStatus, nextStatus);
+
+            if (currentStatus != nextStatus) {
+                order.setStatus(nextStatus);
+                order.setManagedBy(getCurrentUser());
+                order = orderRepository.save(order);
+            }
+
+            return UpdateOrderStatusResponse.builder()
+                    .orderId(order.getId())
+                    .previousStatus(currentStatus)
+                    .currentStatus(order.getStatus())
+                    .allowedNextStatuses(getAllowedNextStatuses(order.getStatus()))
+                    .updatedAt(order.getUpdatedAt())
+                    .updatedByUserId(order.getManagedBy() != null ? order.getManagedBy().getId() : null)
                     .build();
-        } catch (BadRequestException ex) {
+        } catch (BadRequestException | ResourceNotFoundException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new OrderCancellationException();
+            throw new OrderStatusUpdateException(ex);
         }
-    }
-
-    private boolean isCancellableByStaff(OrderStatus status) {
-        return status != OrderStatus.COMPLETED && status != OrderStatus.CANCELLED;
     }
 
     private OrderDetailResponse buildOrderDetailResponse(Order order) {
@@ -247,9 +242,18 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void validateTransition(OrderStatus current, OrderStatus next) {
-        if (current == OrderStatus.CANCELLED || current == OrderStatus.COMPLETED) {
-            throw new BadRequestException("Invalid status transition from " + current + " to " + next);
+        if (next == null) {
+            throw new BadRequestException("Status is required");
         }
+
+        Set<OrderStatus> allowed = ALLOWED_STATUS_TRANSITIONS.getOrDefault(current, Set.of());
+        if (!allowed.contains(next)) {
+            throw new BadRequestException("Invalid status transition from " + current.getValue() + " to " + next.getValue());
+        }
+    }
+
+    private List<OrderStatus> getAllowedNextStatuses(OrderStatus currentStatus) {
+        return ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of()).stream().toList();
     }
 
     private Sort resolveSort(String sortBy, String sortDir) {
@@ -312,9 +316,9 @@ public class OrderServiceImpl implements OrderService {
             return "UNKNOWN";
         }
         return switch (orderStatus) {
-            case PENDING, CONFIRMED -> "PREPARING";
-            case SHIPPING -> "IN_TRANSIT";
-            case COMPLETED -> "DELIVERED";
+            case PENDING, CONFIRMED, PROCESSING -> "PREPARING";
+            case SHIPPED -> "IN_TRANSIT";
+            case DELIVERED, COMPLETED -> "DELIVERED";
             case CANCELLED -> "CANCELLED";
         };
     }
@@ -327,5 +331,17 @@ public class OrderServiceImpl implements OrderService {
         String email = SecurityUtil.getCurrentUsername();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+    }
+
+    private static Map<OrderStatus, Set<OrderStatus>> buildAllowedTransitions() {
+        Map<OrderStatus, Set<OrderStatus>> transitions = new EnumMap<>(OrderStatus.class);
+        transitions.put(OrderStatus.PENDING, EnumSet.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
+        transitions.put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED));
+        transitions.put(OrderStatus.PROCESSING, EnumSet.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED));
+        transitions.put(OrderStatus.SHIPPED, EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED));
+        transitions.put(OrderStatus.DELIVERED, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED));
+        transitions.put(OrderStatus.COMPLETED, EnumSet.of(OrderStatus.COMPLETED));
+        transitions.put(OrderStatus.CANCELLED, EnumSet.of(OrderStatus.CANCELLED));
+        return transitions;
     }
 }
