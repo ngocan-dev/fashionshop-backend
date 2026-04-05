@@ -60,7 +60,8 @@ public class GlobalExceptionHandler {
             AccountDeletionException.class,
             CustomerAccountRetrievalException.class,
             AuthenticationSystemException.class,
-            OrderCancellationException.class
+            OrderCancellationException.class,
+            CartUpdateException.class
     })
     public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -86,6 +87,10 @@ public class GlobalExceptionHandler {
 
         if (hasMissingRequiredField) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
+        }
+
+        if (errors.size() == 1 && errors.containsKey("quantity") && "Invalid quantity".equals(errors.get("quantity"))) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid quantity"));
         }
 
         return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));

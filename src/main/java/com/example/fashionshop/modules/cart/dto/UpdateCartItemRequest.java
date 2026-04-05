@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 public class UpdateCartItemRequest {
-    @NotNull(message = "Quantity is required")
-    @Min(value = 1, message = "Quantity must be greater than 0")
+    @NotNull(message = "Invalid quantity")
+    @Min(value = 1, message = "Invalid quantity")
     private Integer quantity;
 }

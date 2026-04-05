@@ -1,8 +1,13 @@
 package com.example.fashionshop.modules.cart.service;
 
+import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.CartUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.util.SecurityUtil;
-import com.example.fashionshop.modules.cart.dto.*;
+import com.example.fashionshop.modules.cart.dto.AddToCartRequest;
+import com.example.fashionshop.modules.cart.dto.CartItemResponse;
+import com.example.fashionshop.modules.cart.dto.CartResponse;
+import com.example.fashionshop.modules.cart.dto.UpdateCartItemRequest;
 import com.example.fashionshop.modules.cart.entity.Cart;
 import com.example.fashionshop.modules.cart.entity.CartItem;
 import com.example.fashionshop.modules.cart.repository.CartItemRepository;
@@ -12,6 +17,7 @@ import com.example.fashionshop.modules.product.repository.ProductRepository;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +28,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class CartServiceImpl implements CartService {
+
+    private static final String INVALID_QUANTITY_MESSAGE = "Invalid quantity";
+    private static final String INSUFFICIENT_STOCK_MESSAGE = "Insufficient stock available";
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -37,14 +46,24 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartResponse addToCart(AddToCartRequest request) {
-        Cart cart = getOrCreateCart();
-        Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+        validateQuantity(request.getQuantity());
 
+        Cart cart = getOrCreateCart();
+        Product product = findValidProduct(request.getProductId());
         CartItem item = cartItemRepository.findByCartAndProduct(cart, product)
                 .orElse(CartItem.builder().cart(cart).product(product).quantity(0).build());
-        item.setQuantity(item.getQuantity() + request.getQuantity());
-        cartItemRepository.save(item);
+
+        int requestedQuantity = request.getQuantity();
+        int mergedQuantity = item.getQuantity() + requestedQuantity;
+        validateStock(product, mergedQuantity);
+
+        item.setQuantity(mergedQuantity);
+
+        try {
+            cartItemRepository.save(item);
+        } catch (DataAccessException ex) {
+            throw new CartUpdateException("Unable to add item to cart", ex);
+        }
 
         return buildCartResponse(cart);
     }
@@ -52,12 +71,18 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartResponse updateCartItem(Integer itemId, UpdateCartItemRequest request) {
+        validateQuantity(request.getQuantity());
+
         Cart cart = getOrCreateCart();
         CartItem item = cartItemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
         if (!item.getCart().getId().equals(cart.getId())) {
             throw new ResourceNotFoundException("Cart item not found in your cart");
         }
+
+        Product product = findValidProduct(item.getProduct().getId());
+        validateStock(product, request.getQuantity());
+
         item.setQuantity(request.getQuantity());
         cartItemRepository.save(item);
         return buildCartResponse(cart);
@@ -88,6 +113,30 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
+    private Product findValidProduct(Integer productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        if (!Boolean.TRUE.equals(product.getIsActive()) || product.getStockQuantity() == null || product.getStockQuantity() <= 0) {
+            throw new BadRequestException("Product is unavailable");
+        }
+
+        return product;
+    }
+
+    private void validateQuantity(Integer quantity) {
+        if (quantity == null || quantity <= 0) {
+            throw new BadRequestException(INVALID_QUANTITY_MESSAGE);
+        }
+    }
+
+    private void validateStock(Product product, int requestedQuantity) {
+        Integer availableStock = product.getStockQuantity();
+        if (availableStock == null || requestedQuantity > availableStock) {
+            throw new BadRequestException(INSUFFICIENT_STOCK_MESSAGE);
+        }
+    }
+
     private CartResponse buildCartResponse(Cart cart) {
         List<CartItemResponse> items = cartItemRepository.findByCart(cart).stream().map(item -> {
             BigDecimal lineTotal = item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
@@ -102,7 +151,14 @@ public class CartServiceImpl implements CartService {
         }).toList();
 
         BigDecimal total = items.stream().map(CartItemResponse::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        int totalItems = items.stream().mapToInt(CartItemResponse::getQuantity).sum();
 
-        return CartResponse.builder().cartId(cart.getId()).items(items).totalPrice(total).build();
+        return CartResponse.builder()
+                .cartId(cart.getId())
+                .items(items)
+                .totalItems(totalItems)
+                .distinctItemCount(items.size())
+                .totalPrice(total)
+                .build();
     }
 }
