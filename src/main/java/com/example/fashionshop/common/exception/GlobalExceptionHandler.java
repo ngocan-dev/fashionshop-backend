@@ -61,6 +61,7 @@ public class GlobalExceptionHandler {
             CustomerAccountRetrievalException.class,
             AuthenticationSystemException.class,
             OrderCancellationException.class,
+            CartUpdateException.class
             SearchResultLoadException.class
     })
     public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
