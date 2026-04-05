@@ -32,13 +32,28 @@ public class Payment {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus;
 
+    @Column(name = "gateway_transaction_id", length = 100)
+    private String gatewayTransactionId;
+
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
+    @Column(name = "failure_reason", length = 500)
+    private String failureReason;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     @PrePersist
     public void prePersist() {
         if (paymentStatus == null) {
-            paymentStatus = PaymentStatus.UNPAID;
+            paymentStatus = PaymentStatus.PENDING;
+        }
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
         }
     }
 }

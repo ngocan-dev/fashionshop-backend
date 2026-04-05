@@ -226,7 +226,7 @@ public class OrderServiceImpl implements OrderService {
             paymentRepository.save(Payment.builder()
                     .order(order)
                     .paymentMethod(request.getPaymentMethod())
-                    .paymentStatus(PaymentStatus.UNPAID)
+                    .paymentStatus(PaymentStatus.PENDING)
                     .build());
 
             Invoice invoice = Invoice.builder()
