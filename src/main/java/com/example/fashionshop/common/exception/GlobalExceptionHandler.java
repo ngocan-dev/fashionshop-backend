@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
     }
-    
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
@@ -45,7 +45,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
-
     @ExceptionHandler(InvalidAccountDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidAccountDeletion(InvalidAccountDeletionException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
@@ -53,10 +52,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccountDeletionFailure(AccountDeletionException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(CustomerAccountRetrievalException.class)
     public ResponseEntity<ApiResponse<Object>> handleCustomerAccountRetrieval(CustomerAccountRetrievalException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(AccountCreationException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(AuthenticationSystemException.class)
     public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));

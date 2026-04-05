@@ -3,10 +3,10 @@ package com.example.fashionshop.modules.user.service;
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.AccountDeletionException;
 import com.example.fashionshop.common.exception.BadRequestException;
-import com.example.fashionshop.common.exception.InvalidAccountDeletionException;
 import com.example.fashionshop.common.exception.CustomerAccountRetrievalException;
-import com.example.fashionshop.common.exception.StaffAccountLoadException;
+import com.example.fashionshop.common.exception.InvalidAccountDeletionException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.common.exception.StaffAccountLoadException;
 import com.example.fashionshop.common.mapper.UserMapper;
 import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
@@ -85,7 +85,6 @@ public class UserServiceImpl implements UserService {
         return userRepository.findByRole(Role.CUSTOMER).stream().map(UserMapper::toResponse).toList();
     }
 
-
     @Override
     public List<CustomerAccountResponse> getAllCustomerAccounts() {
         try {
@@ -162,6 +161,7 @@ public class UserServiceImpl implements UserService {
         if (!Boolean.TRUE.equals(confirm)) {
             throw new BadRequestException("Deletion confirmation is required");
         }
+    }
 
     private CustomerAccountResponse toCustomerAccountResponse(User user) {
         return CustomerAccountResponse.builder()
@@ -169,6 +169,10 @@ public class UserServiceImpl implements UserService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .status(Boolean.TRUE.equals(user.getIsActive()) ? "ACTIVE" : "INACTIVE")
+                .build();
+    }
+
     private StaffAccountResponse toStaffAccountResponse(User user) {
         return StaffAccountResponse.builder()
                 .id(user.getId())
