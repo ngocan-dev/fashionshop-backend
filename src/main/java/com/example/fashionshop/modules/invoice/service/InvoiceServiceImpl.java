@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.invoice.service;
 
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.ForbiddenException;
 import com.example.fashionshop.common.exception.InvoiceDetailLoadException;
 import com.example.fashionshop.common.exception.InvoiceListLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
@@ -29,6 +30,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -62,6 +64,20 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
+    public InvoiceDetailResponse getMyInvoiceDetail(Integer invoiceId) {
+        try {
+            Invoice invoice = invoiceRepository.findById(invoiceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
+            ensureAccess(invoice.getOrder());
+            return buildInvoiceDetail(invoice);
+        } catch (ResourceNotFoundException | ForbiddenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new InvoiceDetailLoadException(ex);
+        }
+    }
+
+    @Override
     public PaginationResponse<InvoiceSummaryResponse> getManageInvoices(InvoiceListQuery query) {
         try {
             PageRequest pageRequest = PageRequest.of(query.getPage(), query.getSize(), resolveSort(query.getSortBy(), query.getSortDir()));
@@ -90,47 +106,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         try {
             Invoice invoice = invoiceRepository.findById(invoiceId)
                     .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
-
-            Order order = invoice.getOrder();
-            Payment payment = paymentRepository.findTopByOrderOrderByIdDesc(order).orElse(null);
-            List<OrderItem> items = orderItemRepository.findByOrder(order);
-
-            BigDecimal subtotal = calculateSubtotal(items);
-            BigDecimal totalAmount = defaultMoney(invoice.getTotalAmount());
-            BigDecimal taxAmount = defaultMoney(invoice.getTax());
-            BigDecimal shippingFee = BigDecimal.ZERO;
-            BigDecimal discountAmount = subtotal.add(shippingFee).add(taxAmount).subtract(totalAmount);
-            if (discountAmount.signum() < 0) {
-                discountAmount = BigDecimal.ZERO;
-            }
-
-            return InvoiceDetailResponse.builder()
-                    .summary(InvoiceDetailResponse.InvoiceSummary.builder()
-                            .invoiceId(invoice.getId())
-                            .invoiceNumber(invoice.getInvoiceNumber())
-                            .orderId(order.getId())
-                            .invoiceDate(invoice.getIssuedAt())
-                            .paymentStatus(invoice.getPaymentStatus())
-                            .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
-                            .totalAmount(totalAmount)
-                            .subtotal(subtotal)
-                            .shippingFee(shippingFee)
-                            .discountAmount(discountAmount)
-                            .taxAmount(taxAmount)
-                            .build())
-                    .customer(InvoiceDetailResponse.CustomerInfo.builder()
-                            .fullName(resolveCustomerName(order))
-                            .email(order.getUser() != null ? order.getUser().getEmail() : null)
-                            .phone(order.getPhone())
-                            .billingAddress(order.getShippingAddress())
-                            .shippingAddress(order.getShippingAddress())
-                            .build())
-                    .items(items.stream().map(this::toDetailItem).toList())
-                    .additional(InvoiceDetailResponse.AdditionalInfo.builder()
-                            .notes(invoice.getNote())
-                            .lastUpdated(order.getUpdatedAt())
-                            .build())
-                    .build();
+            return buildInvoiceDetail(invoice);
         } catch (ResourceNotFoundException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -140,9 +116,58 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private void ensureAccess(Order order) {
         User user = getCurrentUser();
-        if (user.getRole().name().equals("CUSTOMER") && !order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You cannot access this invoice");
+        if (order == null || order.getUser() == null) {
+            throw new BadRequestException("Invoice is not linked to a customer order");
         }
+        if (user.getRole().name().equals("CUSTOMER") && !order.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("You are not allowed to view this invoice");
+        }
+    }
+
+    private InvoiceDetailResponse buildInvoiceDetail(Invoice invoice) {
+        Order order = invoice.getOrder();
+        Payment payment = paymentRepository.findTopByOrderOrderByIdDesc(order).orElse(null);
+        List<OrderItem> items = orderItemRepository.findByOrder(order);
+
+        BigDecimal subtotal = calculateSubtotal(items);
+        BigDecimal totalAmount = defaultMoney(invoice.getTotalAmount());
+        BigDecimal taxAmount = defaultMoney(invoice.getTax());
+        BigDecimal shippingFee = BigDecimal.ZERO;
+        BigDecimal discountAmount = subtotal.add(shippingFee).add(taxAmount).subtract(totalAmount);
+        if (discountAmount.signum() < 0) {
+            discountAmount = BigDecimal.ZERO;
+        }
+
+        return InvoiceDetailResponse.builder()
+                .summary(InvoiceDetailResponse.InvoiceSummary.builder()
+                        .invoiceId(invoice.getId())
+                        .invoiceNumber(invoice.getInvoiceNumber())
+                        .orderId(order != null ? order.getId() : null)
+                        .orderNumber(resolveOrderNumber(order, invoice))
+                        .invoiceDate(invoice.getIssuedAt())
+                        .paymentStatus(invoice.getPaymentStatus())
+                        .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
+                        .totalAmount(totalAmount)
+                        .subtotal(subtotal)
+                        .shippingFee(shippingFee)
+                        .discountAmount(discountAmount)
+                        .taxAmount(taxAmount)
+                        .build())
+                .customer(InvoiceDetailResponse.CustomerInfo.builder()
+                        .fullName(resolveCustomerName(order))
+                        .email(order != null && order.getUser() != null ? order.getUser().getEmail() : null)
+                        .phone(order != null ? order.getPhone() : null)
+                        .billingAddress(order != null ? order.getShippingAddress() : null)
+                        .shippingAddress(order != null ? order.getShippingAddress() : null)
+                        .build())
+                .items(items.stream().map(this::toDetailItem).toList())
+                .additional(InvoiceDetailResponse.AdditionalInfo.builder()
+                        .transactionReference(payment != null ? payment.getTransactionReference() : null)
+                        .notes(invoice.getNote())
+                        .createdAt(invoice.getIssuedAt())
+                        .updatedAt(resolveUpdatedAt(order, payment))
+                        .build())
+                .build();
     }
 
     private User getCurrentUser() {
@@ -200,6 +225,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .paymentStatus(invoice.getPaymentStatus())
                 .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
                 .invoiceStatus(resolveInvoiceStatus(invoice))
+                .detailPath("/account/invoices/" + invoice.getId())
                 .dueDate(null)
                 .updatedAt(order != null ? order.getUpdatedAt() : null)
                 .build();
@@ -209,6 +235,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         BigDecimal unitPrice = defaultMoney(item.getPrice());
         Integer quantity = item.getQuantity() != null ? item.getQuantity() : 0;
         return InvoiceDetailResponse.InvoiceItem.builder()
+                .productImageUrl(item.getProduct() != null ? item.getProduct().getImageUrl() : null)
                 .productName(item.getProduct() != null ? item.getProduct().getName() : "Unknown product")
                 .sku(item.getProduct() != null && item.getProduct().getId() != null ? "PRD-" + item.getProduct().getId() : null)
                 .quantity(quantity)
@@ -229,6 +256,25 @@ public class InvoiceServiceImpl implements InvoiceService {
             return order.getReceiverName();
         }
         return "Unknown customer";
+    }
+
+    private String resolveOrderNumber(Order order, Invoice invoice) {
+        if (order == null) {
+            return invoice != null ? invoice.getInvoiceNumber() : null;
+        }
+        return "ORD-" + order.getId();
+    }
+
+    private LocalDateTime resolveUpdatedAt(Order order, Payment payment) {
+        LocalDateTime orderUpdatedAt = order != null ? order.getUpdatedAt() : null;
+        LocalDateTime paymentUpdatedAt = payment != null ? payment.getUpdatedAt() : null;
+        if (orderUpdatedAt == null) {
+            return paymentUpdatedAt;
+        }
+        if (paymentUpdatedAt == null) {
+            return orderUpdatedAt;
+        }
+        return orderUpdatedAt.isAfter(paymentUpdatedAt) ? orderUpdatedAt : paymentUpdatedAt;
     }
 
     private String resolveInvoiceStatus(Invoice invoice) {

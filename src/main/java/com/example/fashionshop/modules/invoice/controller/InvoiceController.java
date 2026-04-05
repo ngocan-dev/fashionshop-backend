@@ -34,6 +34,12 @@ public class InvoiceController {
         return ApiResponse.success("Invoice fetched successfully", invoiceService.getById(invoiceId));
     }
 
+    @GetMapping("/my/{invoiceId}")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<InvoiceDetailResponse> getMyInvoiceDetail(@PathVariable @Positive Integer invoiceId) {
+        return ApiResponse.success("Invoice detail fetched successfully", invoiceService.getMyInvoiceDetail(invoiceId));
+    }
+
     @GetMapping("/manage")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
     public ApiResponse<PaginationResponse<InvoiceSummaryResponse>> manageList(@Valid @ModelAttribute InvoiceListQuery query) {

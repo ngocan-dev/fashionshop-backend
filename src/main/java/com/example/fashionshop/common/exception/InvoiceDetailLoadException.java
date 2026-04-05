@@ -6,6 +6,6 @@ public class InvoiceDetailLoadException extends RuntimeException {
     }
 
     public InvoiceDetailLoadException(Throwable cause) {
-        super("Unable to load invoice", cause);
+        super("Unable to load invoice details", cause);
     }
 }

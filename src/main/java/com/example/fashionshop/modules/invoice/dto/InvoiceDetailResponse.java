@@ -23,6 +23,7 @@ public class InvoiceDetailResponse {
         private Integer invoiceId;
         private String invoiceNumber;
         private Integer orderId;
+        private String orderNumber;
         private LocalDateTime invoiceDate;
         private InvoicePaymentStatus paymentStatus;
         private PaymentMethod paymentMethod;
@@ -46,6 +47,7 @@ public class InvoiceDetailResponse {
     @Data
     @Builder
     public static class InvoiceItem {
+        private String productImageUrl;
         private String productName;
         private String sku;
         private Integer quantity;
@@ -57,7 +59,9 @@ public class InvoiceDetailResponse {
     @Data
     @Builder
     public static class AdditionalInfo {
+        private String transactionReference;
         private String notes;
-        private LocalDateTime lastUpdated;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }
