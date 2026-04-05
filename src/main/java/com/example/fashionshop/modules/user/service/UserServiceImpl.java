@@ -5,6 +5,7 @@ import com.example.fashionshop.common.exception.AccountDeletionException;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.CustomerAccountRetrievalException;
 import com.example.fashionshop.common.exception.InvalidAccountDeletionException;
+import com.example.fashionshop.common.exception.ProfileUpdateException;
 import com.example.fashionshop.common.exception.ProfileRetrievalException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.exception.StaffAccountLoadException;
@@ -46,9 +47,25 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse updateMyProfile(UpdateProfileRequest request) {
-        User user = getCurrentAuthenticatedUser();
-        user.setFullName(request.getFullName());
-        return UserMapper.toResponse(userRepository.save(user));
+        User user = getCurrentUser();
+        String normalizedEmail = normalizeRequired(request.getEmail());
+
+        if (userRepository.existsByEmailAndIdNot(normalizedEmail, user.getId())) {
+            throw new BadRequestException("Email already exists");
+        }
+
+        user.setFullName(normalizeRequired(request.getFullName()));
+        user.setEmail(normalizedEmail);
+        user.setPhoneNumber(normalizeOptional(request.getPhoneNumber()));
+        user.setAddress(normalizeOptional(request.getAddress()));
+        user.setAvatarUrl(normalizeOptional(request.getAvatarUrl()));
+        user.setBio(normalizeOptional(request.getBio()));
+
+        try {
+            return UserMapper.toResponse(userRepository.save(user));
+        } catch (DataAccessException ex) {
+            throw new ProfileUpdateException("Profile update failed", ex);
+        }
     }
 
     @Override
@@ -248,6 +265,16 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
+    private String normalizeRequired(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     private User getCurrentCustomerUser() {
         User user = getCurrentAuthenticatedUser();
         if (user.getRole() != Role.CUSTOMER) {

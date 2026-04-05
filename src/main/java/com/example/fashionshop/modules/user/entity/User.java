@@ -25,6 +25,18 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
+    @Column(length = 255)
+    private String address;
+
+    @Column(name = "avatar_url", length = 512)
+    private String avatarUrl;
+
+    @Column(length = 500)
+    private String bio;
+
     @Column(nullable = false, length = 255)
     private String password;
 

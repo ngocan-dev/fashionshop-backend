@@ -12,6 +12,10 @@ public class UserResponse {
     private Integer id;
     private String fullName;
     private String email;
+    private String phoneNumber;
+    private String address;
+    private String avatarUrl;
+    private String bio;
     private Role role;
     private Boolean isActive;
     private LocalDateTime createdAt;

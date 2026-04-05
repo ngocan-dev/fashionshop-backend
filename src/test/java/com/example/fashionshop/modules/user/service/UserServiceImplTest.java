@@ -3,6 +3,7 @@ package com.example.fashionshop.modules.user.service;
 import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.modules.user.dto.CreateStaffRequest;
+import com.example.fashionshop.modules.user.dto.UpdateProfileRequest;
 import com.example.fashionshop.modules.user.dto.UserResponse;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
@@ -19,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -82,5 +84,93 @@ class UserServiceImplTest {
         when(userRepository.existsByEmail("customer-role@shop.com")).thenReturn(false);
 
         assertThrows(BadRequestException.class, () -> userService.createStaff(request));
+    }
+
+    @Test
+    void updateMyProfileShouldSaveAllowedFields() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("customer@shop.com", "password"));
+
+        User customer = User.builder()
+                .id(7)
+                .email("customer@shop.com")
+                .fullName("Old Name")
+                .role(Role.CUSTOMER)
+                .isActive(true)
+                .build();
+
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFullName("  Jane Doe  ");
+        request.setEmail("  jane@shop.com ");
+        request.setPhoneNumber("  +1 202-555-1234 ");
+        request.setAddress(" 123 Main St ");
+        request.setAvatarUrl("https://cdn.shop.com/avatar/jane.png");
+        request.setBio("  Hello there ");
+
+        when(userRepository.findByEmail("customer@shop.com")).thenReturn(Optional.of(customer));
+        when(userRepository.existsByEmailAndIdNot("jane@shop.com", 7)).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserResponse response = userService.updateMyProfile(request);
+
+        assertEquals("Jane Doe", response.getFullName());
+        assertEquals("jane@shop.com", response.getEmail());
+        assertEquals("+1 202-555-1234", response.getPhoneNumber());
+        assertEquals("123 Main St", response.getAddress());
+        assertEquals("https://cdn.shop.com/avatar/jane.png", response.getAvatarUrl());
+        assertEquals("Hello there", response.getBio());
+    }
+
+    @Test
+    void updateMyProfileShouldRejectDuplicateEmail() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("customer@shop.com", "password"));
+
+        User customer = User.builder()
+                .id(7)
+                .email("customer@shop.com")
+                .fullName("Old Name")
+                .role(Role.CUSTOMER)
+                .isActive(true)
+                .build();
+
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFullName("Jane Doe");
+        request.setEmail("exists@shop.com");
+
+        when(userRepository.findByEmail("customer@shop.com")).thenReturn(Optional.of(customer));
+        when(userRepository.existsByEmailAndIdNot("exists@shop.com", 7)).thenReturn(true);
+
+        assertThrows(BadRequestException.class, () -> userService.updateMyProfile(request));
+    }
+
+    @Test
+    void updateMyProfileShouldSetOptionalBlankFieldsToNull() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("customer@shop.com", "password"));
+
+        User customer = User.builder()
+                .id(7)
+                .email("customer@shop.com")
+                .fullName("Old Name")
+                .role(Role.CUSTOMER)
+                .isActive(true)
+                .build();
+
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFullName("Jane Doe");
+        request.setEmail("jane@shop.com");
+        request.setPhoneNumber("   ");
+        request.setAddress("");
+        request.setBio(" ");
+
+        when(userRepository.findByEmail("customer@shop.com")).thenReturn(Optional.of(customer));
+        when(userRepository.existsByEmailAndIdNot("jane@shop.com", 7)).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserResponse response = userService.updateMyProfile(request);
+        assertNull(response.getPhoneNumber());
+        assertNull(response.getAddress());
+        assertNull(response.getBio());
     }
 }

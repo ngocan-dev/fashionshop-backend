@@ -21,8 +21,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ApiResponse<Object>> handleBadRequest(BadRequestException ex) {
+    @ExceptionHandler({BadRequestException.class, InvalidAccountDeletionException.class, AccountCreationException.class})
+    public ResponseEntity<ApiResponse<Object>> handleBadRequest(RuntimeException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -31,94 +31,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({UnauthorizedException.class})
+    @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Object>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
+    @ExceptionHandler({ForbiddenException.class, AccessDeniedException.class})
+    public ResponseEntity<ApiResponse<Object>> handleForbidden(Exception ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
     }
 
-    @ExceptionHandler(HomeDataLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHomeDataLoad(HomeDataLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductDetailLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductDetailLoad(ProductDetailLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductListLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductListLoad(ProductListLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(OrderListLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleOrderListLoad(OrderListLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(OrderDetailLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleOrderDetailLoad(OrderDetailLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(InvoiceListLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInvoiceListLoad(InvoiceListLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(InvoiceDetailLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInvoiceDetailLoad(InvoiceDetailLoadException ex) {
-    @ExceptionHandler(OrderStatusUpdateException.class)
-    public ResponseEntity<ApiResponse<Object>> handleOrderStatusUpdateFailure(OrderStatusUpdateException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductDeletionFailure(ProductDeletionException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductUpdateException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductUpdate(ProductUpdateException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
-            OrderListLoadException.class, OrderDetailLoadException.class, ProductDeletionException.class,
-            ProductUpdateException.class, DashboardLoadException.class, AccountDeletionException.class,
-            CustomerAccountRetrievalException.class, AuthenticationSystemException.class, OrderCancellationException.class})
+    // 🔥 DUY NHẤT 1 handler cho toàn bộ lỗi 500
+    @ExceptionHandler({
+            HomeDataLoadException.class,
+            ProductDetailLoadException.class,
+            ProductListLoadException.class,
+            OrderListLoadException.class,
+            OrderDetailLoadException.class,
+            OrderStatusUpdateException.class,
+            InvoiceListLoadException.class,
+            InvoiceDetailLoadException.class,
+            ProductDeletionException.class,
+            ProductUpdateException.class,
+            ProfileRetrievalException.class,
+            ProfileUpdateException.class,
+            DashboardLoadException.class,
+            StaffAccountLoadException.class,
+            AccountDeletionException.class,
+            CustomerAccountRetrievalException.class,
+            AuthenticationSystemException.class,
+            OrderCancellationException.class
+    })
     public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(InvalidAccountDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInvalidAccountDeletion(InvalidAccountDeletionException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(AccountCreationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(AuthenticationSystemException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProfileRetrievalException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProfileRetrieval(ProfileRetrievalException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -130,15 +76,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException ex) {
         boolean hasMissingRequiredField = false;
         Map<String, String> errors = new HashMap<>();
+
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
             if ("NotBlank".equals(error.getCode()) || "NotNull".equals(error.getCode())) {
                 hasMissingRequiredField = true;
             }
         }
+
         if (hasMissingRequiredField) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
         }
+
         return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));
     }
 
