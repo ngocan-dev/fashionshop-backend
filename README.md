@@ -70,7 +70,7 @@
 
 ### Installation
 ```bash
-git clone <your-repo-url>
+git clone [<your-repo-url>](https://github.com/ngocan-dev/fashionshop-backend)
 cd fashionshop-backend
 chmod +x mvnw
 ./mvnw -v
