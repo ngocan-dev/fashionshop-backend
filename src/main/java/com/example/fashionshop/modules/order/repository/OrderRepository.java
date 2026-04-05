@@ -16,6 +16,8 @@ import java.util.List;
 public interface OrderRepository extends JpaRepository<Order, Integer>, JpaSpecificationExecutor<Order> {
     List<Order> findByUser(User user);
 
+    List<Order> findByUserOrderByCreatedAtDesc(User user);
+
     long countByStatus(OrderStatus status);
 
     long countByUserRole(Role role);

@@ -41,6 +41,32 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
     }
 
+    // 🔥 DUY NHẤT 1 handler cho toàn bộ lỗi 500
+    @ExceptionHandler({
+            HomeDataLoadException.class,
+            ProductDetailLoadException.class,
+            ProductListLoadException.class,
+            OrderListLoadException.class,
+            OrderDetailLoadException.class,
+            OrderStatusUpdateException.class,
+            InvoiceListLoadException.class,
+            InvoiceDetailLoadException.class,
+            ProductDeletionException.class,
+            ProductUpdateException.class,
+            ProfileRetrievalException.class,
+            ProfileUpdateException.class,
+            DashboardLoadException.class,
+            StaffAccountLoadException.class,
+            AccountDeletionException.class,
+            CustomerAccountRetrievalException.class,
+            AuthenticationSystemException.class,
+            OrderCancellationException.class
+    })
+    public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request parameter"));
@@ -50,26 +76,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException ex) {
         boolean hasMissingRequiredField = false;
         Map<String, String> errors = new HashMap<>();
+
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
             if ("NotBlank".equals(error.getCode()) || "NotNull".equals(error.getCode())) {
                 hasMissingRequiredField = true;
             }
         }
+
         if (hasMissingRequiredField) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Please fill in all required fields"));
         }
-        return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));
-    }
 
-    @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
-            OrderListLoadException.class, OrderDetailLoadException.class, ProductDeletionException.class,
-            ProductUpdateException.class, DashboardLoadException.class, AccountDeletionException.class,
-            CustomerAccountRetrievalException.class, AuthenticationSystemException.class, OrderCancellationException.class,
-            OrderStatusUpdateException.class, StaffAccountLoadException.class, InvoiceListLoadException.class,
-            InvoiceDetailLoadException.class, ProfileUpdateException.class})
-    public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+        return ResponseEntity.badRequest().body(ApiResponse.error("Validation failed: " + errors));
     }
 
     @ExceptionHandler(Exception.class)
