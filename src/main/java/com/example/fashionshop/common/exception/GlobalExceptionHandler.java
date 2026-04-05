@@ -36,7 +36,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({ForbiddenException.class})
+    @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
     }
@@ -71,6 +71,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(InvoiceListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceListLoad(InvoiceListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvoiceDetailLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceDetailLoad(InvoiceDetailLoadException ex) {
     @ExceptionHandler(OrderStatusUpdateException.class)
     public ResponseEntity<ApiResponse<Object>> handleOrderStatusUpdateFailure(OrderStatusUpdateException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
@@ -111,7 +118,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid order id"));
+        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request parameter"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

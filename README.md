@@ -95,6 +95,32 @@ Dashboard Sidebar
     └── Order Detail -> /admin/orders/:orderId
 ```
 
+## Staff/Admin Invoice Management (UC-19)
+- **Invoice list endpoint:** `GET /api/invoices/manage`
+- **Invoice detail endpoint:** `GET /api/invoices/manage/{invoiceId}`
+- **Roles:** `STAFF`, `ADMIN`
+- **Purpose:** Return paginated invoice summaries and read-only invoice details for internal management screens.
+- **Query params (invoice list):**
+  - `page` (default: `0`)
+  - `size` (default: `10`, max: `100`)
+  - `paymentStatus` (`PENDING`, `PAID`, `FAILED`, `REFUNDED`)
+  - `keyword` (search by invoice number, customer name/email/phone)
+  - `sortBy` (`id`, `invoiceNumber`, `totalAmount`, `paymentStatus`, `issuedAt`)
+  - `sortDir` (`asc`, `desc`)
+- **Typical responses:**
+  - Success with data: message `Invoice list fetched successfully`
+  - Empty list: message `No invoices available`
+  - Invoice list load error: message `Unable to load invoices`
+  - Invoice detail missing: message `Invoice not found`
+
+Example dashboard navigation wiring (frontend):
+```text
+Dashboard Sidebar
+└── Invoice Management
+    ├── Invoice List   -> /admin/invoices
+    └── Invoice Detail -> /admin/invoices/:invoiceId
+```
+
 ## Notes
 - API responses follow `{ success, message, data }` format.
 - Passwords are encoded with BCrypt.
