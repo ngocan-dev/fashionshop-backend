@@ -2,6 +2,7 @@ package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -26,6 +27,14 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+
+    @GetMapping("/checkout-summary")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CheckoutSummaryResponse> checkoutSummary() {
+        CheckoutSummaryResponse response = orderService.getCheckoutSummary();
+        String message = Boolean.TRUE.equals(response.getEmpty()) ? "Cart is empty" : "Checkout summary fetched successfully";
+        return ApiResponse.success(message, response);
+    }
 
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")

@@ -40,6 +40,9 @@ public class Order {
     @Column(name = "shipping_address", length = 255)
     private String shippingAddress;
 
+    @Column(name = "customer_note", length = 500)
+    private String customerNote;
+
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
