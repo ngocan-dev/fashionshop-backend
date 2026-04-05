@@ -424,3 +424,37 @@ Storefront Header
         └── POST /api/orders on Confirm button
             └── Redirect to /orders/:orderId (or /orders/success)
 ```
+
+## Customer View Payment Status (UC-37)
+- **Order detail payment endpoint:** `GET /api/orders/my/{orderId}/payment`
+- **Payment confirmation endpoint:** `GET /api/payments/orders/{orderId}/summary`
+- **Role:** `CUSTOMER`
+- **Purpose:** Return customer-safe payment status/details for an order and enforce ownership.
+
+### Behavior
+- Verifies the current authenticated customer owns the order.
+- Returns `403` when customer attempts to access another customer's order.
+- Returns `404` when order does not exist.
+- Returns success with message `Payment information not available` when no payment record exists yet.
+- Returns success with message `Payment status fetched successfully` when payment record is found.
+- Returns `500` with message `Unable to load payment status` for unexpected retrieval failures.
+
+### Response highlights (`data`)
+- `paymentStatus`: `pending`, `paid`, `failed`, `cancelled`
+- `paymentMethod`, `paymentDateTime`, `transactionReference`, `paidAmount`
+- `orderId`, `orderCode`, `orderTotalAmount`, `orderStatus`
+- Optional extension fields: `failureReason`, `gatewayProvider`, `lastUpdatedAt`, `refundStatus`
+- `retryAllowed` for future retry-payment CTA (`true` for failed/pending)
+
+### Frontend integration sample
+1. **Order detail page** (`/account/orders/:orderId`)
+   - Call `GET /api/orders/my/{orderId}/payment`.
+   - Render status badge + payment summary card.
+   - If API message is `Payment information not available`, show empty state card.
+
+2. **Payment confirmation page** (`/orders/success` or `/orders/:orderId/confirmation`)
+   - Call `GET /api/payments/orders/{orderId}/summary` after redirect from checkout/payment callback.
+   - Show paid/failed/pending messaging and transaction reference.
+
+3. **Optional order-history badge**
+   - Reuse `paymentStatus` from `GET /api/orders/my/history` rows to display compact badge in list.

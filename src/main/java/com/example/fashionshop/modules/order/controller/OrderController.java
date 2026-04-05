@@ -14,6 +14,8 @@ import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
+import com.example.fashionshop.modules.payment.dto.CustomerPaymentStatusResponse;
+import com.example.fashionshop.modules.payment.service.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final PaymentService paymentService;
 
     @GetMapping("/checkout-summary")
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -92,6 +95,20 @@ public class OrderController {
                 "Order detail fetched successfully",
                 orderService.getMyOrderDetail(orderId)
         );
+    }
+
+
+    @GetMapping("/my/{orderId}/payment")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CustomerPaymentStatusResponse> myOrderPaymentStatus(
+            @PathVariable @Positive Integer orderId) {
+
+        CustomerPaymentStatusResponse response = paymentService.getCustomerPaymentStatus(orderId);
+        if (!response.isPaymentInfoAvailable()) {
+            return ApiResponse.success("Payment information not available", response);
+        }
+
+        return ApiResponse.success("Payment status fetched successfully", response);
     }
 
     @PatchMapping("/my/{orderId}/cancel")
