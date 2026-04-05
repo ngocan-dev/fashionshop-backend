@@ -6,6 +6,7 @@ import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
@@ -29,7 +30,6 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -149,6 +149,39 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Order status update failed"));
+    }
+
+    @Test
+    void cancelMyOrder_shouldReturnCancelledOrder() throws Exception {
+        CancelOrderResponse response = CancelOrderResponse.builder()
+                .orderId(1001)
+                .status(OrderStatus.CANCELLED)
+                .cancellationReason("Created duplicated order")
+                .updatedAt(LocalDateTime.of(2026, 4, 2, 12, 10))
+                .build();
+
+        when(orderService.cancelMyOrder(any(), any())).thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/my/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("reason", "Created duplicated order"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order cancelled successfully"))
+                .andExpect(jsonPath("$.data.orderId").value(1001))
+                .andExpect(jsonPath("$.data.status").value("cancelled"));
+    }
+
+    @Test
+    void cancelMyOrder_shouldReturnCannotCancelMessageWhenOrderIsShipped() throws Exception {
+        when(orderService.cancelMyOrder(any(), any())).thenThrow(new BadRequestException("Order cannot be cancelled"));
+
+        mockMvc.perform(patch("/api/orders/my/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("reason", "Need to update address"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Order cannot be cancelled"));
     }
 
     private OrderDetailResponse buildOrderDetailResponse() {

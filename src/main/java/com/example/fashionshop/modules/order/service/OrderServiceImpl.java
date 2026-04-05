@@ -5,6 +5,7 @@ import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
@@ -22,6 +23,8 @@ import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.entity.Order;
@@ -57,6 +60,8 @@ import static com.example.fashionshop.common.enums.InvoicePaymentStatus.PENDING;
 public class OrderServiceImpl implements OrderService {
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = buildAllowedTransitions();
+    private static final Set<OrderStatus> CUSTOMER_NON_CANCELLABLE_STATUSES =
+            EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.CANCELLED);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -142,17 +147,29 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public void cancelMyOrder(Integer orderId) {
-        User user = getCurrentUser();
-        Order order = getOrderOrThrow(orderId);
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You are not allowed to cancel this order");
+    public CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request) {
+        try {
+            User user = getCurrentUser();
+            Order order = getOrderOrThrow(orderId);
+            validateCustomerOwnsOrder(user, order);
+            validateOrderCanBeCancelledByCustomer(order);
+
+            if (order.getStatus() != OrderStatus.CANCELLED) {
+                order.setStatus(OrderStatus.CANCELLED);
+                order = orderRepository.save(order);
+            }
+
+            return CancelOrderResponse.builder()
+                    .orderId(order.getId())
+                    .status(order.getStatus())
+                    .cancellationReason(request != null ? request.getReason() : null)
+                    .updatedAt(order.getUpdatedAt())
+                    .build();
+        } catch (BadRequestException | ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderCancellationException();
         }
-        if (EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED).contains(order.getStatus())) {
-            throw new BadRequestException("Cannot cancel this order in current status");
-        }
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
     }
 
     @Override
@@ -325,6 +342,18 @@ public class OrderServiceImpl implements OrderService {
 
     private Order getOrderOrThrow(Integer orderId) {
         return orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+    }
+
+    private void validateCustomerOwnsOrder(User user, Order order) {
+        if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
+            throw new BadRequestException("You are not allowed to cancel this order");
+        }
+    }
+
+    private void validateOrderCanBeCancelledByCustomer(Order order) {
+        if (order.getStatus() == null || CUSTOMER_NON_CANCELLABLE_STATUSES.contains(order.getStatus())) {
+            throw new BadRequestException("Order cannot be cancelled");
+        }
     }
 
     private User getCurrentUser() {

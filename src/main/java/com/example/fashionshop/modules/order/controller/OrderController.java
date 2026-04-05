@@ -2,6 +2,8 @@ package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -55,9 +57,10 @@ public class OrderController {
 
     @PatchMapping("/my/{orderId}/cancel")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<Void> cancelMyOrder(@PathVariable @Positive Integer orderId) {
-        orderService.cancelMyOrder(orderId);
-        return ApiResponse.success("Order cancelled successfully", null);
+    public ApiResponse<CancelOrderResponse> cancelMyOrder(@PathVariable @Positive Integer orderId,
+                                                          @Valid @RequestBody(required = false) CancelOrderRequest request) {
+        CancelOrderRequest safeRequest = request == null ? new CancelOrderRequest() : request;
+        return ApiResponse.success("Order cancelled successfully", orderService.cancelMyOrder(orderId, safeRequest));
     }
 
     @GetMapping("/manage")
