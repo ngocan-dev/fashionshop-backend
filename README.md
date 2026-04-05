@@ -385,3 +385,42 @@ Example responses:
 3. **Unauthenticated behavior**
    - API returns `401` when token is missing/invalid.
    - Frontend should follow existing auth flow: redirect to login page or open login modal.
+
+## Customer Place Order / Checkout (UC-30)
+- **Checkout summary endpoint:** `GET /api/orders/checkout-summary`
+- **Place order endpoint:** `POST /api/orders`
+- **Role:** `CUSTOMER`
+- **Purpose:** Support customer checkout page by loading active cart summary, validating shipping + payment info, and creating order transactionally from active cart.
+
+### Place-order request body
+```json
+{
+  "receiverName": "Nguyen Van A",
+  "phone": "+84901234567",
+  "shippingAddress": "123 Main St",
+  "district": "District 1",
+  "city": "Ho Chi Minh City",
+  "province": "Ho Chi Minh",
+  "postalCode": "700000",
+  "note": "Please call before delivery",
+  "paymentMethod": "COD"
+}
+```
+
+### Checkout behavior highlights
+- Returns `Cart is empty` when active cart has no items.
+- Validates required fields: receiver name, valid phone format, shipping address, payment method.
+- Re-validates stock and product availability before creating order.
+- Creates order + order items snapshot + payment + invoice in one transaction.
+- Clears cart items after successful order placement.
+- Returns `Order placement failed` on unexpected server-side creation failure.
+
+### Suggested storefront navigation
+```text
+Storefront Header
+└── Cart Icon -> /cart
+    └── Checkout CTA ("Proceed to checkout") -> /checkout
+        ├── GET /api/orders/checkout-summary
+        └── POST /api/orders on Confirm button
+            └── Redirect to /orders/:orderId (or /orders/success)
+```
