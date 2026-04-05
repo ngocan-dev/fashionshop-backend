@@ -39,7 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/dashboard/**", "/api/orders/manage/**", "/api/invoices/manage/**")
                         .hasAnyRole("STAFF", "ADMIN")
-                        .requestMatchers("/api/products/**", "/api/categories/**", "/api/home/**").permitAll()
+                        .requestMatchers("/api/products/**", "/api/categories/**", "/api/home/**", "/api/store/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(authenticationEntryPoint))

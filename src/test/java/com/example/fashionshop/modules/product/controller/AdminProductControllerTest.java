@@ -24,10 +24,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -187,6 +187,9 @@ class AdminProductControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Product deletion failed"));
+    }
+
+    @Test
     void updateProduct_shouldReturnUpdatedProductForAdminOrStaff() throws Exception {
         ProductDetailResponse updated = ProductDetailResponse.builder()
                 .id(101)
@@ -207,13 +210,13 @@ class AdminProductControllerTest {
 
         String payload = """
                 {
-                  "name": "Classic Blazer Updated",
-                  "description": "Updated description",
-                  "categoryId": 8,
-                  "price": 209.99,
-                  "stockQuantity": 20,
-                  "imageUrls": ["https://cdn.example.com/products/101-main.jpg"],
-                  "status": "ACTIVE"
+                  \"name\": \"Classic Blazer Updated\",
+                  \"description\": \"Updated description\",
+                  \"categoryId\": 8,
+                  \"price\": 209.99,
+                  \"stockQuantity\": 20,
+                  \"imageUrls\": [\"https://cdn.example.com/products/101-main.jpg\"],
+                  \"status\": \"ACTIVE\"
                 }
                 """;
 
@@ -230,9 +233,9 @@ class AdminProductControllerTest {
     void updateProduct_shouldReturnValidationErrorWhenRequiredFieldsMissing() throws Exception {
         String invalidPayload = """
                 {
-                  "description": "Updated description",
-                  "price": -1,
-                  "stockQuantity": -2
+                  \"description\": \"Updated description\",
+                  \"price\": -1,
+                  \"stockQuantity\": -2
                 }
                 """;
 
@@ -249,12 +252,12 @@ class AdminProductControllerTest {
 
         String payload = """
                 {
-                  "name": "Classic Blazer Updated",
-                  "description": "Updated description",
-                  "categoryId": 8,
-                  "price": 209.99,
-                  "stockQuantity": 20,
-                  "status": "ACTIVE"
+                  \"name\": \"Classic Blazer Updated\",
+                  \"description\": \"Updated description\",
+                  \"categoryId\": 8,
+                  \"price\": 209.99,
+                  \"stockQuantity\": 20,
+                  \"status\": \"ACTIVE\"
                 }
                 """;
 
