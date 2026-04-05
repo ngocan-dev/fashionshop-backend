@@ -2,8 +2,11 @@ package com.example.fashionshop.modules.product.controller;
 
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.ProductDetailLoadException;
+import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
+import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,74 @@ class AdminProductControllerTest {
 
     @MockBean
     private ProductService productService;
+
+    @Test
+    void getProductList_shouldReturnProductListForAdminOrStaff() throws Exception {
+        ProductManageSummaryResponse product = ProductManageSummaryResponse.builder()
+                .id(101)
+                .productCode("SKU-101")
+                .sku("SKU-101")
+                .name("Classic Blazer")
+                .categoryId(8)
+                .categoryName("Blazers")
+                .price(new BigDecimal("199.99"))
+                .stockQuantity(25)
+                .stockStatus("IN_STOCK")
+                .isActive(true)
+                .status("ACTIVE")
+                .thumbnailUrl("https://cdn.example.com/products/101-main.jpg")
+                .detailUrl("/api/products/manage/101")
+                .build();
+
+        PaginationResponse<ProductManageSummaryResponse> page = PaginationResponse.<ProductManageSummaryResponse>builder()
+                .items(List.of(product))
+                .page(0)
+                .size(10)
+                .totalItems(1)
+                .totalPages(1)
+                .build();
+
+        when(productService.getManageProducts(0, 10, null)).thenReturn(page);
+
+        mockMvc.perform(get("/api/products/manage")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Product list fetched successfully"))
+                .andExpect(jsonPath("$.data.items[0].id").value(101))
+                .andExpect(jsonPath("$.data.items[0].stockStatus").value("IN_STOCK"));
+    }
+
+    @Test
+    void getProductList_shouldReturnNoProductsAvailableWhenListIsEmpty() throws Exception {
+        PaginationResponse<ProductManageSummaryResponse> emptyPage = PaginationResponse.<ProductManageSummaryResponse>builder()
+                .items(List.of())
+                .page(0)
+                .size(10)
+                .totalItems(0)
+                .totalPages(0)
+                .build();
+
+        when(productService.getManageProducts(0, 10, null)).thenReturn(emptyPage);
+
+        mockMvc.perform(get("/api/products/manage").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("No products available"))
+                .andExpect(jsonPath("$.data.items").isArray());
+    }
+
+    @Test
+    void getProductList_shouldReturnUnableToLoadWhenRetrievalFails() throws Exception {
+        when(productService.getManageProducts(0, 10, null)).thenThrow(new ProductListLoadException());
+
+        mockMvc.perform(get("/api/products/manage").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load product list"));
+    }
 
     @Test
     void getProductDetail_shouldReturnProductDetailsForAdminOrStaff() throws Exception {

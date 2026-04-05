@@ -45,9 +45,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
-
     @ExceptionHandler(ProductDetailLoadException.class)
     public ResponseEntity<ApiResponse<Object>> handleProductDetailLoad(ProductDetailLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleProductListLoad(ProductListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(DashboardLoadException.class)
     public ResponseEntity<ApiResponse<Object>> handleDashboardLoad(DashboardLoadException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));

@@ -2,6 +2,7 @@ package com.example.fashionshop.modules.product.service;
 
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.ProductDetailLoadException;
+import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.ProductMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
@@ -9,6 +10,7 @@ import com.example.fashionshop.common.util.SecurityUtil;
 import com.example.fashionshop.modules.category.entity.Category;
 import com.example.fashionshop.modules.category.repository.CategoryRepository;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
+import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.entity.Product;
@@ -95,6 +97,32 @@ public class ProductServiceImpl implements ProductService {
             throw ex;
         } catch (Exception ex) {
             throw new ProductDetailLoadException();
+        }
+    }
+
+
+    @Override
+    public PaginationResponse<ProductManageSummaryResponse> getManageProducts(int page, int size, String keyword) {
+        if (page < 0 || size <= 0) {
+            throw new BadRequestException("Invalid pagination parameters");
+        }
+
+        try {
+            Page<Product> result = (keyword == null || keyword.isBlank())
+                    ? productRepository.findAll(PageRequest.of(page, size))
+                    : productRepository.findByNameContainingIgnoreCase(keyword, PageRequest.of(page, size));
+
+            return PaginationResponse.<ProductManageSummaryResponse>builder()
+                    .items(result.getContent().stream().map(ProductMapper::toManageSummaryResponse).toList())
+                    .page(result.getNumber())
+                    .size(result.getSize())
+                    .totalItems(result.getTotalElements())
+                    .totalPages(result.getTotalPages())
+                    .build();
+        } catch (BadRequestException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ProductListLoadException();
         }
     }
 
