@@ -1,11 +1,14 @@
 package com.example.fashionshop.modules.order.service;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.ForbiddenException;
+import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderPlacementException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
@@ -18,6 +21,11 @@ import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryItemResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
+import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -32,17 +40,20 @@ import com.example.fashionshop.modules.order.repository.OrderRepository;
 import com.example.fashionshop.modules.payment.entity.Payment;
 import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.product.entity.Product;
+import com.example.fashionshop.modules.product.repository.ProductRepository;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -57,7 +68,20 @@ import static com.example.fashionshop.common.enums.InvoicePaymentStatus.PENDING;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
-    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS = buildAllowedTransitions();
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
+    private static final BigDecimal DEFAULT_SHIPPING_FEE = ZERO;
+    private static final BigDecimal DEFAULT_DISCOUNT = ZERO;
+
+    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_STATUS_TRANSITIONS =
+            buildAllowedTransitions();
+
+    private static final Set<OrderStatus> CUSTOMER_NON_CANCELLABLE_STATUSES =
+            EnumSet.of(
+                    OrderStatus.SHIPPED,
+                    OrderStatus.DELIVERED,
+                    OrderStatus.COMPLETED,
+                    OrderStatus.CANCELLED
+            );
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -66,69 +90,217 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
+    private final ProductRepository productRepository;
     private final NotificationService notificationService;
+
+    @Override
+    public CheckoutSummaryResponse getCheckoutSummary() {
+        User user = getCurrentUser();
+        Cart cart = cartRepository.findByUser(user).orElse(null);
+
+        if (cart == null) {
+            return CheckoutSummaryResponse.builder()
+                    .empty(true)
+                    .message("Cart is empty")
+                    .customerName(user.getFullName())
+                    .customerPhone(user.getPhoneNumber())
+                    .suggestedShippingAddress(user.getAddress())
+                    .availablePaymentMethods(List.of(PaymentMethod.values()))
+                    .items(List.of())
+                    .totalItems(0)
+                    .distinctItemCount(0)
+                    .subtotal(ZERO)
+                    .shippingFee(DEFAULT_SHIPPING_FEE)
+                    .discountAmount(DEFAULT_DISCOUNT)
+                    .finalTotal(ZERO)
+                    .build();
+        }
+
+        List<CartItem> cartItems = cartItemRepository.findByCart(cart);
+        if (cartItems.isEmpty()) {
+            return CheckoutSummaryResponse.builder()
+                    .cartId(cart.getId())
+                    .empty(true)
+                    .message("Cart is empty")
+                    .customerName(user.getFullName())
+                    .customerPhone(user.getPhoneNumber())
+                    .suggestedShippingAddress(user.getAddress())
+                    .availablePaymentMethods(List.of(PaymentMethod.values()))
+                    .items(List.of())
+                    .totalItems(0)
+                    .distinctItemCount(0)
+                    .subtotal(ZERO)
+                    .shippingFee(DEFAULT_SHIPPING_FEE)
+                    .discountAmount(DEFAULT_DISCOUNT)
+                    .finalTotal(ZERO)
+                    .build();
+        }
+
+        List<CheckoutSummaryItemResponse> items = cartItems.stream()
+                .map(this::toCheckoutItem)
+                .toList();
+
+        BigDecimal subtotal = items.stream()
+                .map(CheckoutSummaryItemResponse::getLineTotal)
+                .reduce(ZERO, BigDecimal::add);
+
+        int totalItems = items.stream()
+                .mapToInt(item -> item.getQuantity() == null ? 0 : item.getQuantity())
+                .sum();
+
+        return CheckoutSummaryResponse.builder()
+                .cartId(cart.getId())
+                .empty(false)
+                .message("Checkout summary fetched successfully")
+                .customerName(user.getFullName())
+                .customerPhone(user.getPhoneNumber())
+                .suggestedShippingAddress(user.getAddress())
+                .availablePaymentMethods(List.of(PaymentMethod.values()))
+                .items(items)
+                .totalItems(totalItems)
+                .distinctItemCount(items.size())
+                .subtotal(subtotal)
+                .shippingFee(DEFAULT_SHIPPING_FEE)
+                .discountAmount(DEFAULT_DISCOUNT)
+                .finalTotal(subtotal.add(DEFAULT_SHIPPING_FEE).subtract(DEFAULT_DISCOUNT))
+                .build();
+    }
 
     @Override
     @Transactional
     public OrderResponse placeOrder(PlaceOrderRequest request) {
-        User user = getCurrentUser();
-        Cart cart = cartRepository.findByUser(user).orElseThrow(() -> new BadRequestException("Cart is empty"));
-        List<CartItem> cartItems = cartItemRepository.findByCart(cart);
-        if (cartItems.isEmpty()) {
-            throw new BadRequestException("Cart is empty");
-        }
+        try {
+            User user = getCurrentUser();
+            Cart cart = cartRepository.findByUser(user)
+                    .orElseThrow(() -> new BadRequestException("Cart is empty"));
 
-        BigDecimal totalPrice = BigDecimal.ZERO;
-        for (CartItem cartItem : cartItems) {
-            Product product = cartItem.getProduct();
-            if (product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new BadRequestException("Insufficient stock for product: " + product.getName());
+            List<CartItem> cartItems = cartItemRepository.findByCart(cart);
+            if (cartItems.isEmpty()) {
+                throw new BadRequestException("Cart is empty");
             }
-            totalPrice = totalPrice.add(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
-        }
 
-        Order order = orderRepository.save(Order.builder()
-                .user(user)
-                .status(OrderStatus.PENDING)
-                .totalPrice(totalPrice)
-                .receiverName(request.getReceiverName())
-                .phone(request.getPhone())
-                .shippingAddress(request.getShippingAddress())
-                .build());
+            if (request.getPaymentMethod() == null) {
+                throw new BadRequestException("Payment method is required");
+            }
 
-        for (CartItem cartItem : cartItems) {
-            Product product = cartItem.getProduct();
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-            orderItemRepository.save(OrderItem.builder()
-                    .order(order)
-                    .product(product)
-                    .quantity(cartItem.getQuantity())
-                    .price(product.getPrice())
+            BigDecimal subtotal = ZERO;
+            List<CartItem> validItems = new ArrayList<>();
+
+            for (CartItem cartItem : cartItems) {
+                Product product = validateAndLockProduct(cartItem.getProduct().getId());
+                validateProductAvailability(product, cartItem);
+
+                BigDecimal lineTotal = product.getPrice()
+                        .multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+                subtotal = subtotal.add(lineTotal);
+                validItems.add(cartItem);
+            }
+
+            BigDecimal finalTotal = subtotal.add(DEFAULT_SHIPPING_FEE).subtract(DEFAULT_DISCOUNT);
+
+            Order order = orderRepository.save(Order.builder()
+                    .user(user)
+                    .status(OrderStatus.PENDING)
+                    .totalPrice(finalTotal)
+                    .receiverName(request.getReceiverName())
+                    .phone(request.getPhone())
+                    .shippingAddress(buildShippingAddress(request))
+                    .customerNote(request.getNote())
                     .build());
+
+            for (CartItem cartItem : validItems) {
+                Product product = validateAndLockProduct(cartItem.getProduct().getId());
+                validateProductAvailability(product, cartItem);
+
+                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+                productRepository.save(product);
+
+                orderItemRepository.save(OrderItem.builder()
+                        .order(order)
+                        .product(product)
+                        .quantity(cartItem.getQuantity())
+                        .price(product.getPrice())
+                        .build());
+            }
+
+            paymentRepository.save(Payment.builder()
+                    .order(order)
+                    .paymentMethod(request.getPaymentMethod())
+                    .paymentStatus(PaymentStatus.UNPAID)
+                    .build());
+
+            Invoice invoice = Invoice.builder()
+                    .order(order)
+                    .invoiceNumber("INV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                    .tax(ZERO)
+                    .totalAmount(finalTotal)
+                    .paymentStatus(PENDING)
+                    .note("Invoice created automatically when placing order")
+                    .build();
+            invoiceRepository.save(invoice);
+
+            cartItemRepository.deleteByCart(cart);
+            notificationService.sendOrderNotification(
+                    user.getId(),
+                    "Order #" + order.getId() + " placed successfully"
+            );
+
+            return OrderMapper.toResponse(
+                    order,
+                    orderItemRepository.findByOrder(order),
+                    paymentRepository.findTopByOrderOrderByIdDesc(order)
+            );
+        } catch (BadRequestException | ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderPlacementException("Order placement failed", ex);
         }
-
-        Invoice invoice = Invoice.builder()
-                .order(order)
-                .invoiceNumber("INV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
-                .tax(BigDecimal.ZERO)
-                .totalAmount(totalPrice)
-                .paymentStatus(PENDING)
-                .note("Invoice created automatically when placing order")
-                .build();
-        invoiceRepository.save(invoice);
-
-        cartItemRepository.deleteByCart(cart);
-        notificationService.sendOrderNotification(user.getId(), "Order #" + order.getId() + " placed successfully");
-
-        return OrderMapper.toResponse(order, orderItemRepository.findByOrder(order));
     }
 
     @Override
     public List<OrderResponse> getMyOrders() {
         User user = getCurrentUser();
-        return orderRepository.findByUserOrderByCreatedAtDesc(user).stream()
-                .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order)))
+        return orderRepository.findByUser(user).stream()
+                .map(order -> OrderMapper.toResponse(
+                        order,
+                        orderItemRepository.findByOrder(order),
+                        paymentRepository.findTopByOrderOrderByIdDesc(order)
+                ))
                 .toList();
+    }
+
+    @Override
+    public PaginationResponse<OrderSummaryResponse> getMyOrderHistory(CustomerOrderHistoryQuery query) {
+        User user = getCurrentUser();
+
+        try {
+            Pageable pageable = PageRequest.of(
+                    query.getPage(),
+                    query.getSize(),
+                    resolveSort(query.getSortBy(), query.getSortDir())
+            );
+
+            Page<Order> orderPage = orderRepository.findAll(
+                    buildCustomerOrderHistorySpecification(user, query),
+                    pageable
+            );
+
+            List<OrderSummaryResponse> items = orderPage.getContent().stream()
+                    .map(this::toOrderSummaryResponse)
+                    .toList();
+
+            return PaginationResponse.<OrderSummaryResponse>builder()
+                    .items(items)
+                    .page(orderPage.getNumber())
+                    .size(orderPage.getSize())
+                    .totalItems(orderPage.getTotalElements())
+                    .totalPages(orderPage.getTotalPages())
+                    .build();
+        } catch (OrderListLoadException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderListLoadException("Unable to load order history");
+        }
     }
 
     @Override
@@ -147,23 +319,40 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public void cancelMyOrder(Integer orderId) {
-        User user = getCurrentUser();
-        Order order = getOrderOrThrow(orderId);
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("You are not allowed to cancel this order");
+    public CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request) {
+        try {
+            User user = getCurrentUser();
+            Order order = getOrderOrThrow(orderId);
+
+            validateCustomerOwnsOrder(user, order);
+            validateOrderCanBeCancelledByCustomer(order);
+
+            if (order.getStatus() != OrderStatus.CANCELLED) {
+                order.setStatus(OrderStatus.CANCELLED);
+                order = orderRepository.save(order);
+            }
+
+            return CancelOrderResponse.builder()
+                    .orderId(order.getId())
+                    .status(order.getStatus())
+                    .cancellationReason(request != null ? request.getReason() : null)
+                    .updatedAt(order.getUpdatedAt())
+                    .build();
+        } catch (BadRequestException | ResourceNotFoundException | ForbiddenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderCancellationException();
         }
-        if (EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED).contains(order.getStatus())) {
-            throw new BadRequestException("Cannot cancel this order in current status");
-        }
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
     }
 
     @Override
     public List<OrderResponse> getAllOrders() {
         return orderRepository.findAll().stream()
-                .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order)))
+                .map(order -> OrderMapper.toResponse(
+                        order,
+                        orderItemRepository.findByOrder(order),
+                        paymentRepository.findTopByOrderOrderByIdDesc(order)
+                ))
                 .toList();
     }
 
@@ -172,7 +361,10 @@ public class OrderServiceImpl implements OrderService {
         try {
             Sort sort = resolveSort(query.getSortBy(), query.getSortDir());
             PageRequest pageRequest = PageRequest.of(query.getPage(), query.getSize(), sort);
-            Page<Order> orderPage = orderRepository.findAll(buildManageOrderSpecification(query), pageRequest);
+            Page<Order> orderPage = orderRepository.findAll(
+                    buildManageOrderSpecification(query),
+                    pageRequest
+            );
 
             List<OrderSummaryResponse> items = orderPage.getContent().stream()
                     .map(this::toOrderSummaryResponse)
@@ -246,6 +438,70 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    private CheckoutSummaryItemResponse toCheckoutItem(CartItem cartItem) {
+        Product product = cartItem.getProduct();
+        BigDecimal unitPrice = product.getPrice() == null ? ZERO : product.getPrice();
+        int quantity = cartItem.getQuantity() == null ? 0 : cartItem.getQuantity();
+
+        return CheckoutSummaryItemResponse.builder()
+                .itemId(cartItem.getId())
+                .productId(product.getId())
+                .productName(product.getName())
+                .productImage(product.getImageUrl())
+                .quantity(quantity)
+                .unitPrice(unitPrice)
+                .lineTotal(unitPrice.multiply(BigDecimal.valueOf(quantity)))
+                .build();
+    }
+
+    private String buildShippingAddress(PlaceOrderRequest request) {
+        List<String> chunks = new ArrayList<>();
+
+        if (hasText(request.getShippingAddress())) {
+            chunks.add(request.getShippingAddress().trim());
+        }
+        if (hasText(request.getDistrict())) {
+            chunks.add(request.getDistrict().trim());
+        }
+        if (hasText(request.getCity())) {
+            chunks.add(request.getCity().trim());
+        }
+        if (hasText(request.getProvince())) {
+            chunks.add(request.getProvince().trim());
+        }
+        if (hasText(request.getPostalCode())) {
+            chunks.add(request.getPostalCode().trim());
+        }
+
+        return String.join(", ", chunks);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private Product validateAndLockProduct(Integer productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new BadRequestException("Product unavailable"));
+    }
+
+    private void validateProductAvailability(Product product, CartItem cartItem) {
+        if (!Boolean.TRUE.equals(product.getIsActive())) {
+            throw new BadRequestException("Product unavailable");
+        }
+
+        Integer availableStock = product.getStockQuantity();
+        Integer requestedQty = cartItem.getQuantity();
+
+        if (requestedQty == null || requestedQty <= 0) {
+            throw new BadRequestException("Cart contains invalid item quantity");
+        }
+
+        if (availableStock == null || availableStock < requestedQty) {
+            throw new BadRequestException("Insufficient stock available");
+        }
+    }
+
     private void validateTransition(OrderStatus current, OrderStatus next) {
         if (next == null) {
             throw new BadRequestException("Status is required");
@@ -253,12 +509,16 @@ public class OrderServiceImpl implements OrderService {
 
         Set<OrderStatus> allowed = ALLOWED_STATUS_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(next)) {
-            throw new BadRequestException("Invalid status transition from " + current.getValue() + " to " + next.getValue());
+            throw new BadRequestException(
+                    "Invalid status transition from " + current.getValue() + " to " + next.getValue()
+            );
         }
     }
 
     private List<OrderStatus> getAllowedNextStatuses(OrderStatus currentStatus) {
-        return ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of()).stream().toList();
+        return ALLOWED_STATUS_TRANSITIONS.getOrDefault(currentStatus, Set.of())
+                .stream()
+                .toList();
     }
 
     private Sort resolveSort(String sortBy, String sortDir) {
@@ -267,15 +527,22 @@ public class OrderServiceImpl implements OrderService {
             case "id", "status", "totalPrice", "createdAt", "updatedAt" -> normalizedSortBy;
             default -> "createdAt";
         };
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
         return Sort.by(direction, safeSortBy);
     }
 
     private Specification<Order> buildManageOrderSpecification(OrderListQuery query) {
         return (root, criteriaQuery, criteriaBuilder) -> {
             var predicates = criteriaBuilder.conjunction();
+
             if (query.getStatus() != null) {
-                predicates.getExpressions().add(criteriaBuilder.equal(root.get("status"), query.getStatus()));
+                predicates.getExpressions().add(
+                        criteriaBuilder.equal(root.get("status"), query.getStatus())
+                );
             }
 
             if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
@@ -289,6 +556,28 @@ public class OrderServiceImpl implements OrderService {
                         )
                 );
             }
+
+            return predicates;
+        };
+    }
+
+    private Specification<Order> buildCustomerOrderHistorySpecification(
+            User user,
+            CustomerOrderHistoryQuery query
+    ) {
+        return (root, criteriaQuery, criteriaBuilder) -> {
+            var predicates = criteriaBuilder.conjunction();
+
+            predicates.getExpressions().add(
+                    criteriaBuilder.equal(root.get("user").get("id"), user.getId())
+            );
+
+            if (query.getStatus() != null) {
+                predicates.getExpressions().add(
+                        criteriaBuilder.equal(root.get("status"), query.getStatus())
+                );
+            }
+
             return predicates;
         };
     }
@@ -308,8 +597,12 @@ public class OrderServiceImpl implements OrderService {
                 .orderDate(order.getCreatedAt())
                 .orderStatus(order.getStatus())
                 .paymentStatus(payment != null ? payment.getPaymentStatus().name() : PaymentStatus.UNPAID.name())
-                .paymentMethod(payment != null && payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
-                .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO)
+                .paymentMethod(
+                        payment != null && payment.getPaymentMethod() != null
+                                ? payment.getPaymentMethod().name()
+                                : null
+                )
+                .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
                 .updatedAt(order.getUpdatedAt())
@@ -320,6 +613,7 @@ public class OrderServiceImpl implements OrderService {
         if (orderStatus == null) {
             return "UNKNOWN";
         }
+
         return switch (orderStatus) {
             case PENDING, CONFIRMED, PROCESSING -> "PREPARING";
             case SHIPPED -> "IN_TRANSIT";
@@ -329,7 +623,20 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Order getOrderOrThrow(Integer orderId) {
-        return orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+    }
+
+    private void validateCustomerOwnsOrder(User user, Order order) {
+        if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("You are not allowed to cancel this order");
+        }
+    }
+
+    private void validateOrderCanBeCancelledByCustomer(Order order) {
+        if (order.getStatus() == null || CUSTOMER_NON_CANCELLABLE_STATUSES.contains(order.getStatus())) {
+            throw new BadRequestException("Order cannot be cancelled");
+        }
     }
 
     private User getCurrentUser() {
@@ -340,13 +647,36 @@ public class OrderServiceImpl implements OrderService {
 
     private static Map<OrderStatus, Set<OrderStatus>> buildAllowedTransitions() {
         Map<OrderStatus, Set<OrderStatus>> transitions = new EnumMap<>(OrderStatus.class);
-        transitions.put(OrderStatus.PENDING, EnumSet.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.PROCESSING, EnumSet.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.SHIPPED, EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED));
-        transitions.put(OrderStatus.DELIVERED, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED));
-        transitions.put(OrderStatus.COMPLETED, EnumSet.of(OrderStatus.COMPLETED));
-        transitions.put(OrderStatus.CANCELLED, EnumSet.of(OrderStatus.CANCELLED));
+
+        transitions.put(
+                OrderStatus.PENDING,
+                EnumSet.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.CONFIRMED,
+                EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.PROCESSING,
+                EnumSet.of(OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.CANCELLED)
+        );
+        transitions.put(
+                OrderStatus.SHIPPED,
+                EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED)
+        );
+        transitions.put(
+                OrderStatus.DELIVERED,
+                EnumSet.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED)
+        );
+        transitions.put(
+                OrderStatus.COMPLETED,
+                EnumSet.of(OrderStatus.COMPLETED)
+        );
+        transitions.put(
+                OrderStatus.CANCELLED,
+                EnumSet.of(OrderStatus.CANCELLED)
+        );
+
         return transitions;
     }
 }

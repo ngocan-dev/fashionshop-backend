@@ -4,8 +4,11 @@ import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.GlobalExceptionHandler;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
+import com.example.fashionshop.common.exception.OrderListLoadException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
+import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.order.dto.OrderCustomerInfoResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailItemResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
@@ -29,9 +32,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -104,6 +105,68 @@ class OrderControllerTest {
     }
 
     @Test
+    void myOrderHistory_shouldReturnOrderHistoryWhenOrdersExist() throws Exception {
+        PaginationResponse<OrderSummaryResponse> response = PaginationResponse.<OrderSummaryResponse>builder()
+                .items(List.of(OrderSummaryResponse.builder()
+                        .id(1001)
+                        .orderId(1001)
+                        .orderCode("INV-AB12CD34")
+                        .orderDate(LocalDateTime.of(2026, 3, 20, 10, 30))
+                        .orderStatus(OrderStatus.CONFIRMED)
+                        .paymentStatus("PAID")
+                        .paymentMethod("COD")
+                        .totalAmount(new BigDecimal("320.00"))
+                        .itemCount(2)
+                        .shippingStatus("PREPARING")
+                        .updatedAt(LocalDateTime.of(2026, 3, 21, 12, 0))
+                        .build()))
+                .page(0)
+                .size(10)
+                .totalItems(1)
+                .totalPages(1)
+                .build();
+
+        when(orderService.getMyOrderHistory(any())).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/my/history").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order history fetched successfully"))
+                .andExpect(jsonPath("$.data.items[0].orderId").value(1001))
+                .andExpect(jsonPath("$.data.items[0].totalAmount").value(320.00))
+                .andExpect(jsonPath("$.data.items[0].orderStatus").value("confirmed"));
+    }
+
+    @Test
+    void myOrderHistory_shouldReturnEmptyMessageWhenNoOrdersFound() throws Exception {
+        PaginationResponse<OrderSummaryResponse> response = PaginationResponse.<OrderSummaryResponse>builder()
+                .items(List.of())
+                .page(0)
+                .size(10)
+                .totalItems(0)
+                .totalPages(0)
+                .build();
+
+        when(orderService.getMyOrderHistory(any())).thenReturn(response);
+
+        mockMvc.perform(get("/api/orders/my/history").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("No order history available"))
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
+    void myOrderHistory_shouldReturnFailureMessageWhenServiceThrowsError() throws Exception {
+        when(orderService.getMyOrderHistory(any())).thenThrow(new OrderListLoadException("Unable to load order history"));
+
+        mockMvc.perform(get("/api/orders/my/history").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to load order history"));
+    }
+
+    @Test
     void updateStatus_shouldReturnUpdatedStatus() throws Exception {
         UpdateOrderStatusResponse response = UpdateOrderStatusResponse.builder()
                 .orderId(1001)
@@ -149,6 +212,39 @@ class OrderControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Order status update failed"));
+    }
+
+    @Test
+    void cancelMyOrder_shouldReturnCancelledOrder() throws Exception {
+        CancelOrderResponse response = CancelOrderResponse.builder()
+                .orderId(1001)
+                .status(OrderStatus.CANCELLED)
+                .cancellationReason("Created duplicated order")
+                .updatedAt(LocalDateTime.of(2026, 4, 2, 12, 10))
+                .build();
+
+        when(orderService.cancelMyOrder(any(), any())).thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/my/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("reason", "Created duplicated order"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order cancelled successfully"))
+                .andExpect(jsonPath("$.data.orderId").value(1001))
+                .andExpect(jsonPath("$.data.status").value("cancelled"));
+    }
+
+    @Test
+    void cancelMyOrder_shouldReturnCannotCancelMessageWhenOrderIsShipped() throws Exception {
+        when(orderService.cancelMyOrder(any(), any())).thenThrow(new BadRequestException("Order cannot be cancelled"));
+
+        mockMvc.perform(patch("/api/orders/my/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("reason", "Need to update address"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Order cannot be cancelled"));
     }
 
     private OrderDetailResponse buildOrderDetailResponse() {

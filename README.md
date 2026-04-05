@@ -239,6 +239,44 @@ Example response highlights:
   - Empty cart state: `empty: true` (frontend shows `Your cart is empty`)
   - Retrieval failure: message `Unable to load cart items`
 
+## Customer View Order History (UC-33)
+- **Endpoint:** `GET /api/orders/my/history`
+- **Role:** `CUSTOMER`
+- **Purpose:** Return a paginated order-history list for the currently authenticated customer only.
+- **Auth/ownership rules:**
+  - Requires valid customer JWT/session.
+  - The API always filters by current authenticated customer and never exposes other customers' orders.
+- **Query params (optional):**
+  - `page` (default: `0`)
+  - `size` (default: `10`, max: `50`)
+  - `status` (`PENDING`, `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `COMPLETED`, `CANCELLED`)
+  - `sortBy` (`id`, `status`, `totalPrice`, `createdAt`, `updatedAt`)
+  - `sortDir` (`asc`, `desc`)
+- **History row fields (`data.items[]`):**
+  - `orderId`
+  - `orderCode` (invoice/order reference when available)
+  - `orderDate`
+  - `totalAmount`
+  - `orderStatus`
+  - plus optional enrichments: `paymentStatus`, `paymentMethod`, `itemCount`, `shippingStatus`, `updatedAt`
+- **Typical responses:**
+  - Success with data: message `Order history fetched successfully`
+  - Empty list: message `No order history available`
+  - Retrieval failure: message `Unable to load order history`
+
+Example customer account navigation wiring (frontend):
+```text
+Account Menu
+├── Profile         -> /account/profile
+├── Order History   -> /account/orders
+└── Wishlist        -> /account/wishlist
+
+Order History Page (/account/orders)
+└── Calls GET /api/orders/my/history?page=0&size=10
+    └── Clicking one row navigates to /account/orders/:orderId
+        └── Detail API: GET /api/orders/my/{orderId}
+```
+
 Example storefront integration wiring (frontend):
 ```text
 Storefront Header
@@ -347,3 +385,42 @@ Example responses:
 3. **Unauthenticated behavior**
    - API returns `401` when token is missing/invalid.
    - Frontend should follow existing auth flow: redirect to login page or open login modal.
+
+## Customer Place Order / Checkout (UC-30)
+- **Checkout summary endpoint:** `GET /api/orders/checkout-summary`
+- **Place order endpoint:** `POST /api/orders`
+- **Role:** `CUSTOMER`
+- **Purpose:** Support customer checkout page by loading active cart summary, validating shipping + payment info, and creating order transactionally from active cart.
+
+### Place-order request body
+```json
+{
+  "receiverName": "Nguyen Van A",
+  "phone": "+84901234567",
+  "shippingAddress": "123 Main St",
+  "district": "District 1",
+  "city": "Ho Chi Minh City",
+  "province": "Ho Chi Minh",
+  "postalCode": "700000",
+  "note": "Please call before delivery",
+  "paymentMethod": "COD"
+}
+```
+
+### Checkout behavior highlights
+- Returns `Cart is empty` when active cart has no items.
+- Validates required fields: receiver name, valid phone format, shipping address, payment method.
+- Re-validates stock and product availability before creating order.
+- Creates order + order items snapshot + payment + invoice in one transaction.
+- Clears cart items after successful order placement.
+- Returns `Order placement failed` on unexpected server-side creation failure.
+
+### Suggested storefront navigation
+```text
+Storefront Header
+└── Cart Icon -> /cart
+    └── Checkout CTA ("Proceed to checkout") -> /checkout
+        ├── GET /api/orders/checkout-summary
+        └── POST /api/orders on Confirm button
+            └── Redirect to /orders/:orderId (or /orders/success)
+```

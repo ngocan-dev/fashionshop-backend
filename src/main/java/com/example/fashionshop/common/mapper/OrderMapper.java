@@ -18,7 +18,7 @@ public final class OrderMapper {
     private OrderMapper() {
     }
 
-    public static OrderResponse toResponse(Order order, List<OrderItem> items) {
+    public static OrderResponse toResponse(Order order, List<OrderItem> items, Optional<Payment> latestPayment) {
         return OrderResponse.builder()
                 .id(order.getId())
                 .status(order.getStatus())
@@ -26,6 +26,8 @@ public final class OrderMapper {
                 .receiverName(order.getReceiverName())
                 .phone(order.getPhone())
                 .shippingAddress(order.getShippingAddress())
+                .customerNote(order.getCustomerNote())
+                .paymentMethod(latestPayment.map(Payment::getPaymentMethod).orElse(null))
                 .cancellationReason(order.getCancellationReason())
                 .createdAt(order.getCreatedAt())
                 .detailPath("/account/orders/" + order.getId())
@@ -64,7 +66,7 @@ public final class OrderMapper {
                         .build())
                 .items(items.stream().map(OrderMapper::toDetailItemResponse).toList())
                 .additionalInfo(OrderAdditionalInfoResponse.builder()
-                        .customerNote(null)
+                        .customerNote(order.getCustomerNote())
                         .deliveryMethod(null)
                         .internalNote(invoice.map(Invoice::getNote).orElse(null))
                         .estimatedDeliveryDate(null)

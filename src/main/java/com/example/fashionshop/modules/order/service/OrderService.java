@@ -1,6 +1,10 @@
 package com.example.fashionshop.modules.order.service;
 
 import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
+import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -12,13 +16,17 @@ import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import java.util.List;
 
 public interface OrderService {
+    CheckoutSummaryResponse getCheckoutSummary();
+
     OrderResponse placeOrder(PlaceOrderRequest request);
 
     List<OrderResponse> getMyOrders();
 
+    PaginationResponse<OrderSummaryResponse> getMyOrderHistory(CustomerOrderHistoryQuery query);
+
     OrderDetailResponse getMyOrderDetail(Integer orderId);
 
-    void cancelMyOrder(Integer orderId);
+    CancelOrderResponse cancelMyOrder(Integer orderId, CancelOrderRequest request);
 
     List<OrderResponse> getAllOrders();
 

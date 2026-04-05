@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.order.dto;
 
 import com.example.fashionshop.common.enums.OrderStatus;
+import com.example.fashionshop.common.enums.PaymentMethod;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,6 +18,8 @@ public class OrderResponse {
     private String receiverName;
     private String phone;
     private String shippingAddress;
+    private String customerNote;
+    private PaymentMethod paymentMethod;
     private String cancellationReason;
     private LocalDateTime createdAt;
     private String detailPath;
