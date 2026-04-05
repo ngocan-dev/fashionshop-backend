@@ -205,6 +205,27 @@ Frontend mapping recommendation for product detail page:
    - if API returns 500/cart update error, show `Unable to add item to cart`
 4. On success, show toast and update header badge with `data.totalItems`.
 
+## Customer Adjust Quantity In Cart (UC-27)
+- **Endpoints:** `PUT /api/cart/items/{itemId}` or `PUT /api/cart/items/{itemId}/quantity`
+- **Role:** `CUSTOMER`
+- **Request body:**
+  ```json
+  {
+    "quantity": 3
+  }
+  ```
+- **Behavior:**
+  - Validates `quantity > 0` (message: `Invalid quantity`)
+  - Validates product still active and checks stock availability
+  - If quantity exceeds stock, returns `Insufficient stock available`
+  - Recalculates line subtotal + cart totals and returns updated cart state
+  - Cart page can stay in place and immediately rerender totals/header badge from `data`
+
+Example response highlights:
+- `data.items[].quantity` for each row quantity selector
+- `data.items[].lineTotal` for per-item subtotal updates
+- `data.subtotal` and `data.totalPrice` for cart summary updates
+- `data.totalItems` for header cart badge sync
 ## Customer View Cart (UC-26)
 - **Cart page endpoint:** `GET /api/cart`
 - **Cart badge count endpoint:** `GET /api/cart/summary`
