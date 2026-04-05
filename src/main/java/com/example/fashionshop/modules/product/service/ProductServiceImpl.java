@@ -7,6 +7,7 @@ import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ProductUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.exception.SearchResultLoadException;
+import com.example.fashionshop.common.exception.StoreProductDetailLoadException;
 import com.example.fashionshop.common.exception.StoreProductListLoadException;
 import com.example.fashionshop.common.mapper.ProductMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
@@ -20,6 +21,7 @@ import com.example.fashionshop.modules.product.dto.ProductRequest;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.dto.ProductSearchResponse;
 import com.example.fashionshop.modules.product.dto.ProductStatus;
+import com.example.fashionshop.modules.product.dto.StoreProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 import com.example.fashionshop.modules.product.repository.ProductRepository;
@@ -218,6 +220,21 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public StoreProductDetailResponse getStoreProductDetail(String idOrSlug) {
+        Integer productId = extractProductId(idOrSlug);
+
+        try {
+            Product product = productRepository.findByIdAndIsActiveTrue(productId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not available"));
+            return ProductMapper.toStoreDetailResponse(product);
+        } catch (BadRequestException | ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new StoreProductDetailLoadException();
+        }
+    }
+
+    @Override
     public List<ProductSearchResponse> searchProducts(String keyword) {
         String trimmedKeyword = keyword == null ? "" : keyword.trim();
         if (trimmedKeyword.isEmpty()) {
@@ -296,6 +313,25 @@ public class ProductServiceImpl implements ProductService {
         }
 
         return String.join(",", sanitizedUrls);
+    }
+
+    private Integer extractProductId(String idOrSlug) {
+        if (idOrSlug == null || idOrSlug.isBlank()) {
+            throw new BadRequestException("Invalid product id or slug");
+        }
+
+        String normalized = idOrSlug.trim();
+
+        if (normalized.matches("\\d+")) {
+            return Integer.parseInt(normalized);
+        }
+
+        if (normalized.matches("[A-Za-z0-9-]*-\\d+")) {
+            String[] segments = normalized.split("-");
+            return Integer.parseInt(segments[segments.length - 1]);
+        }
+
+        throw new BadRequestException("Invalid product id or slug");
     }
 
     private void validatePagination(int page, int size) {
