@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
+import com.example.fashionshop.common.exception.AccountCreationException;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
@@ -15,6 +16,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -32,24 +34,29 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Email already exists");
         }
 
+        String fullName = resolveFullName(request);
         User user = User.builder()
-                .fullName(request.getFullName())
+                .fullName(fullName)
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.CUSTOMER)
                 .isActive(true)
                 .build();
 
-        User savedUser = userRepository.save(user);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
+        try {
+            User savedUser = userRepository.save(user);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
 
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(savedUser.getId())
-                .fullName(savedUser.getFullName())
-                .email(savedUser.getEmail())
-                .role(savedUser.getRole())
-                .build();
+            return AuthResponse.builder()
+                    .token(jwtService.generateToken(userDetails))
+                    .userId(savedUser.getId())
+                    .fullName(savedUser.getFullName())
+                    .email(savedUser.getEmail())
+                    .role(savedUser.getRole())
+                    .build();
+        } catch (Exception exception) {
+            throw new AccountCreationException("Account creation failed");
+        }
     }
 
     @Override
@@ -69,5 +76,17 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(user.getRole())
                 .build();
+    }
+
+    private String resolveFullName(RegisterRequest request) {
+        if (StringUtils.hasText(request.getFullName())) {
+            return request.getFullName().trim();
+        }
+        String email = request.getEmail();
+        int delimiterIndex = email.indexOf('@');
+        if (delimiterIndex > 0) {
+            return email.substring(0, delimiterIndex);
+        }
+        return email;
     }
 }
