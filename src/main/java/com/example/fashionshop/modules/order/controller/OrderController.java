@@ -4,6 +4,8 @@ import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
 import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
+import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
+import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
@@ -29,6 +31,16 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    @GetMapping("/checkout-summary")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CheckoutSummaryResponse> checkoutSummary() {
+        CheckoutSummaryResponse response = orderService.getCheckoutSummary();
+        String message = Boolean.TRUE.equals(response.getEmpty())
+                ? "Cart is empty"
+                : "Checkout summary fetched successfully";
+        return ApiResponse.success(message, response);
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<OrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
@@ -37,9 +49,16 @@ public class OrderController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<PaginationResponse<OrderSummaryResponse>> orderList(@Valid @ModelAttribute OrderListQuery query) {
-        PaginationResponse<OrderSummaryResponse> response = orderService.getManageOrderSummaries(query);
-        String message = response.getItems().isEmpty() ? "No orders found" : "Order list fetched successfully";
+    public ApiResponse<PaginationResponse<OrderSummaryResponse>> orderList(
+            @Valid @ModelAttribute OrderListQuery query) {
+
+        PaginationResponse<OrderSummaryResponse> response =
+                orderService.getManageOrderSummaries(query);
+
+        String message = response.getItems().isEmpty()
+                ? "No orders found"
+                : "Order list fetched successfully";
+
         return ApiResponse.success(message, response);
     }
 
@@ -49,18 +68,45 @@ public class OrderController {
         return ApiResponse.success("Orders fetched successfully", orderService.getMyOrders());
     }
 
+    @GetMapping("/my/history")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<PaginationResponse<OrderSummaryResponse>> myOrderHistory(
+            @Valid @ModelAttribute CustomerOrderHistoryQuery query) {
+
+        PaginationResponse<OrderSummaryResponse> response =
+                orderService.getMyOrderHistory(query);
+
+        String message = response.getItems().isEmpty()
+                ? "No order history available"
+                : "Order history fetched successfully";
+
+        return ApiResponse.success(message, response);
+    }
+
     @GetMapping("/my/{orderId}")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<OrderDetailResponse> myOrderDetail(@PathVariable @Positive Integer orderId) {
-        return ApiResponse.success("Order detail fetched successfully", orderService.getMyOrderDetail(orderId));
+    public ApiResponse<OrderDetailResponse> myOrderDetail(
+            @PathVariable @Positive Integer orderId) {
+
+        return ApiResponse.success(
+                "Order detail fetched successfully",
+                orderService.getMyOrderDetail(orderId)
+        );
     }
 
     @PatchMapping("/my/{orderId}/cancel")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<CancelOrderResponse> cancelMyOrder(@PathVariable @Positive Integer orderId,
-                                                          @Valid @RequestBody(required = false) CancelOrderRequest request) {
-        CancelOrderRequest safeRequest = request == null ? new CancelOrderRequest() : request;
-        return ApiResponse.success("Order cancelled successfully", orderService.cancelMyOrder(orderId, safeRequest));
+    public ApiResponse<CancelOrderResponse> cancelMyOrder(
+            @PathVariable @Positive Integer orderId,
+            @Valid @RequestBody(required = false) CancelOrderRequest request) {
+
+        CancelOrderRequest safeRequest =
+                request == null ? new CancelOrderRequest() : request;
+
+        return ApiResponse.success(
+                "Order cancelled successfully",
+                orderService.cancelMyOrder(orderId, safeRequest)
+        );
     }
 
     @GetMapping("/manage")
@@ -71,27 +117,44 @@ public class OrderController {
 
     @GetMapping("/manage/{orderId}")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<OrderDetailResponse> orderDetail(@PathVariable @Positive Integer orderId) {
-        return ApiResponse.success("Order detail fetched successfully", orderService.getOrderDetail(orderId));
+    public ApiResponse<OrderDetailResponse> orderDetail(
+            @PathVariable @Positive Integer orderId) {
+
+        return ApiResponse.success(
+                "Order detail fetched successfully",
+                orderService.getOrderDetail(orderId)
+        );
     }
 
     @GetMapping("/{orderId}")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<OrderDetailResponse> orderDetailById(@PathVariable @Positive Integer orderId) {
-        return ApiResponse.success("Order detail fetched successfully", orderService.getOrderDetail(orderId));
+    public ApiResponse<OrderDetailResponse> orderDetailById(
+            @PathVariable @Positive Integer orderId) {
+
+        return ApiResponse.success(
+                "Order detail fetched successfully",
+                orderService.getOrderDetail(orderId)
+        );
     }
 
     @PatchMapping("/{orderId}/status")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<UpdateOrderStatusResponse> updateStatus(@PathVariable @Positive Integer orderId,
-                                                               @Valid @RequestBody UpdateOrderStatusRequest request) {
-        return ApiResponse.success("Order status updated successfully", orderService.updateOrderStatus(orderId, request));
+    public ApiResponse<UpdateOrderStatusResponse> updateStatus(
+            @PathVariable @Positive Integer orderId,
+            @Valid @RequestBody UpdateOrderStatusRequest request) {
+
+        return ApiResponse.success(
+                "Order status updated successfully",
+                orderService.updateOrderStatus(orderId, request)
+        );
     }
 
     @PatchMapping("/manage/{orderId}/status")
     @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
-    public ApiResponse<UpdateOrderStatusResponse> updateManageStatus(@PathVariable @Positive Integer orderId,
-                                                                     @Valid @RequestBody UpdateOrderStatusRequest request) {
+    public ApiResponse<UpdateOrderStatusResponse> updateManageStatus(
+            @PathVariable @Positive Integer orderId,
+            @Valid @RequestBody UpdateOrderStatusRequest request) {
+
         return updateStatus(orderId, request);
     }
 }
