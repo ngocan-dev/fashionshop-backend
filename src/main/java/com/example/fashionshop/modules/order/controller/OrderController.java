@@ -1,7 +1,10 @@
 package com.example.fashionshop.modules.order.controller;
 
 import com.example.fashionshop.common.response.ApiResponse;
+import com.example.fashionshop.common.response.PaginationResponse;
+import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
+import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.service.OrderService;
@@ -23,6 +26,14 @@ public class OrderController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<OrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         return ApiResponse.success("Order placed successfully", orderService.placeOrder(request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
+    public ApiResponse<PaginationResponse<OrderSummaryResponse>> orderList(@Valid @ModelAttribute OrderListQuery query) {
+        PaginationResponse<OrderSummaryResponse> response = orderService.getManageOrderSummaries(query);
+        String message = response.getItems().isEmpty() ? "No orders found" : "Order list fetched successfully";
+        return ApiResponse.success(message, response);
     }
 
     @GetMapping("/my")

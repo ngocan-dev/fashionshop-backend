@@ -70,6 +70,31 @@ mysql -u root -p ecommerce_db < your_dump.sql
 - `/api/dashboard`
 - `/api/home`
 
+## Staff/Admin Order List (UC-16)
+- **Endpoint:** `GET /api/orders`
+- **Roles:** `STAFF`, `ADMIN`
+- **Purpose:** Return paginated order summaries for order management screens.
+- **Query params (optional):**
+  - `page` (default: `0`)
+  - `size` (default: `10`, max: `100`)
+  - `status` (`PENDING`, `CONFIRMED`, `SHIPPING`, `COMPLETED`, `CANCELLED`)
+  - `keyword` (search by customer/order contact info)
+  - `sortBy` (`id`, `status`, `totalPrice`, `createdAt`, `updatedAt`)
+  - `sortDir` (`asc`, `desc`)
+- **Typical responses:**
+  - Success with data: message `Order list fetched successfully`
+  - Empty list: message `No orders found`
+  - Forbidden: message `Access denied`
+  - Load error: message `Failed to load order list`
+
+Example dashboard navigation wiring (frontend):
+```text
+Dashboard Sidebar
+└── Order Management
+    ├── Order List  -> /admin/orders
+    └── Order Detail -> /admin/orders/:orderId
+```
+
 ## Notes
 - API responses follow `{ success, message, data }` format.
 - Passwords are encoded with BCrypt.
