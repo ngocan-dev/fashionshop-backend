@@ -1,6 +1,7 @@
 package com.example.fashionshop.common.mapper;
 
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
+import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 
@@ -25,6 +26,28 @@ public final class ProductMapper {
                 .manageDetailUrl("/api/products/manage/" + product.getId())
                 .build();
     }
+
+    public static ProductManageSummaryResponse toManageSummaryResponse(Product product) {
+        boolean inStock = product.getStockQuantity() != null && product.getStockQuantity() > 0;
+        boolean active = Boolean.TRUE.equals(product.getIsActive());
+
+        return ProductManageSummaryResponse.builder()
+                .id(product.getId())
+                .productCode("SKU-" + product.getId())
+                .sku("SKU-" + product.getId())
+                .name(product.getName())
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .price(product.getPrice())
+                .stockQuantity(product.getStockQuantity())
+                .stockStatus(inStock ? "IN_STOCK" : "OUT_OF_STOCK")
+                .isActive(product.getIsActive())
+                .status(active ? "ACTIVE" : "INACTIVE")
+                .thumbnailUrl(product.getImageUrl())
+                .detailUrl("/api/products/manage/" + product.getId())
+                .build();
+    }
+
     public static ProductDetailResponse toDetailResponse(Product product) {
         boolean inStock = product.getStockQuantity() != null && product.getStockQuantity() > 0;
         boolean active = Boolean.TRUE.equals(product.getIsActive());
