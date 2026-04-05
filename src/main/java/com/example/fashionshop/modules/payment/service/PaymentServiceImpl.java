@@ -6,6 +6,8 @@ import com.example.fashionshop.common.enums.PaymentMethod;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.common.exception.ForbiddenException;
+import com.example.fashionshop.common.exception.PaymentCancelledException;
+import com.example.fashionshop.common.exception.PaymentGatewayException;
 import com.example.fashionshop.common.exception.PaymentStatusLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -17,6 +19,7 @@ import com.example.fashionshop.modules.payment.dto.CustomerPaymentStatusResponse
 import com.example.fashionshop.modules.payment.dto.PaymentRequest;
 import com.example.fashionshop.modules.payment.dto.PaymentResponse;
 import com.example.fashionshop.modules.payment.entity.Payment;
+import com.example.fashionshop.modules.payment.gateway.*;
 import com.example.fashionshop.modules.payment.mapper.PaymentStatusMapper;
 import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.user.entity.User;
@@ -26,88 +29,103 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final long ORDER_PAYMENT_TTL_MINUTES = 30;
+
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final InvoiceRepository invoiceRepository;
     private final UserRepository userRepository;
+    private final PaymentGatewayFactory paymentGatewayFactory;
 
+    // ================= PROCESS PAYMENT =================
     @Override
     @Transactional
-    public PaymentResponse processPayment(PaymentRequest request) {
-        try {
-            User user = getCurrentUser();
-            Order order = orderRepository.findById(request.getOrderId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+    public PaymentResponse processPayment(Integer orderId, PaymentRequest request) {
 
-            if (!order.getUser().getId().equals(user.getId())) {
-                throw new BadRequestException("You can only pay your own order");
-            }
-
-            PaymentStatus status = (request.getPaymentMethod() == PaymentMethod.COD)
-                    ? PaymentStatus.UNPAID
-                    : PaymentStatus.PAID;
-
-            Payment payment = Payment.builder()
-                    .order(order)
-                    .paymentMethod(request.getPaymentMethod())
-                    .paymentStatus(status)
-                    .paidAt(status == PaymentStatus.PAID ? LocalDateTime.now() : null)
-                    .paidAmount(status == PaymentStatus.PAID ? order.getTotalPrice() : null)
-                    .gatewayProvider(request.getPaymentMethod() != null ? request.getPaymentMethod().name() : null)
-                    .transactionReference(
-                            status == PaymentStatus.PAID
-                                    ? generateTransactionReference(request.getPaymentMethod())
-                                    : null
-                    )
-                    .build();
-
-            Payment saved = paymentRepository.save(payment);
-
-            Invoice invoice = invoiceRepository.findByOrder(order)
-                    .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
-
-            invoice.setPaymentStatus(
-                    status == PaymentStatus.PAID
-                            ? InvoicePaymentStatus.PAID
-                            : InvoicePaymentStatus.PENDING
-            );
-            invoiceRepository.save(invoice);
-
-            if (request.getPaymentMethod() == PaymentMethod.COD || status == PaymentStatus.PAID) {
-                order.setStatus(OrderStatus.CONFIRMED);
-                orderRepository.save(order);
-            }
-
-            return toResponse(saved);
-        } catch (BadRequestException | ResourceNotFoundException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new BadRequestException("Payment processing failed. Please retry payment");
-        }
-    }
-
-    @Override
-    public PaymentResponse getPaymentStatus(Integer orderId) {
         User user = getCurrentUser();
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOwnedOrderOrThrow(orderId, user.getId());
 
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You can only view payment of your own order");
+        validateOrderEligibility(order);
+
+        String idempotencyKey = normalizeIdempotencyKey(request.getIdempotencyKey());
+
+        Payment existing = paymentRepository
+                .findTopByOrderAndIdempotencyKeyOrderByIdDesc(order, idempotencyKey)
+                .orElse(null);
+
+        if (existing != null) {
+            return toResponse(existing, order, "Duplicate payment request", false, null);
         }
 
-        Payment payment = paymentRepository.findTopByOrderOrderByIdDesc(order)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        // COD flow
+        if (request.getPaymentMethod() == PaymentMethod.COD) {
+            Payment payment = paymentRepository.save(Payment.builder()
+                    .order(order)
+                    .paymentMethod(PaymentMethod.COD)
+                    .paymentStatus(PaymentStatus.UNPAID)
+                    .idempotencyKey(idempotencyKey)
+                    .build());
 
-        return toResponse(payment);
+            order.setStatus(OrderStatus.CONFIRMED);
+            orderRepository.save(order);
+            updateInvoiceStatus(order, InvoicePaymentStatus.PENDING);
+
+            return toResponse(payment, order, "Order confirmed with COD", false, null);
+        }
+
+        // Gateway flow
+        Payment processing = paymentRepository.save(Payment.builder()
+                .order(order)
+                .paymentMethod(request.getPaymentMethod())
+                .paymentStatus(PaymentStatus.PROCESSING)
+                .idempotencyKey(idempotencyKey)
+                .build());
+
+        PaymentGateway gateway = paymentGatewayFactory.getGateway(request.getPaymentMethod());
+        GatewayPaymentResult result = gateway.charge(
+                GatewayPaymentRequest.builder()
+                        .orderId(order.getId())
+                        .amount(order.getTotalPrice())
+                        .paymentMethod(request.getPaymentMethod())
+                        .idempotencyKey(idempotencyKey)
+                        .build()
+        );
+
+        if (result.getStatus() == GatewayPaymentStatus.FAILED) {
+            processing.setPaymentStatus(PaymentStatus.FAILED);
+            processing.setFailureReason(result.getMessage());
+            paymentRepository.save(processing);
+            updateInvoiceStatus(order, InvoicePaymentStatus.FAILED);
+            throw new PaymentGatewayException("Payment failed");
+        }
+
+        if (result.getStatus() == GatewayPaymentStatus.CANCELLED) {
+            processing.setPaymentStatus(PaymentStatus.CANCELLED);
+            paymentRepository.save(processing);
+            updateInvoiceStatus(order, InvoicePaymentStatus.PENDING);
+            throw new PaymentCancelledException("Payment cancelled");
+        }
+
+        processing.setPaymentStatus(PaymentStatus.PAID);
+        processing.setPaidAt(LocalDateTime.now());
+        processing.setGatewayTransactionId(result.getTransactionId());
+        paymentRepository.save(processing);
+
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+        updateInvoiceStatus(order, InvoicePaymentStatus.PAID);
+
+        return toResponse(processing, order, "Payment successful", false, result.getRedirectUrl());
     }
 
+    // ================= STATUS =================
     @Override
     public CustomerPaymentStatusResponse getCustomerPaymentStatus(Integer orderId) {
         try {
@@ -122,34 +140,58 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private PaymentResponse toResponse(Payment payment) {
+    // ================= HELPERS =================
+    private void validateOrderEligibility(Order order) {
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new BadRequestException("Cancelled order cannot be paid");
+        }
+
+        boolean alreadyPaid = paymentRepository.existsByOrderAndPaymentStatusIn(
+                order, List.of(PaymentStatus.PAID)
+        );
+
+        if (alreadyPaid) {
+            throw new BadRequestException("Order already paid");
+        }
+    }
+
+    private void updateInvoiceStatus(Order order, InvoicePaymentStatus status) {
+        Invoice invoice = invoiceRepository.findByOrder(order)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
+        invoice.setPaymentStatus(status);
+        invoiceRepository.save(invoice);
+    }
+
+    private PaymentResponse toResponse(Payment payment,
+                                       Order order,
+                                       String message,
+                                       boolean retryable,
+                                       String redirectUrl) {
+
         return PaymentResponse.builder()
                 .paymentId(payment.getId())
-                .orderId(payment.getOrder().getId())
+                .orderId(order.getId())
                 .paymentMethod(payment.getPaymentMethod())
                 .paymentStatus(payment.getPaymentStatus())
+                .orderStatus(order.getStatus())
+                .message(message)
+                .retryable(retryable)
+                .redirectUrl(redirectUrl)
                 .paidAt(payment.getPaidAt())
                 .build();
     }
 
     private Order getOwnedOrderOrThrow(Integer orderId, Integer userId) {
         return orderRepository.findByIdAndUserId(orderId, userId)
-                .orElseGet(() -> {
-                    if (orderRepository.existsById(orderId)) {
-                        throw new ForbiddenException("You are not allowed to view this payment information");
-                    }
-                    throw new ResourceNotFoundException("Order not found");
-                });
+                .orElseThrow(() -> new ForbiddenException("Access denied"));
     }
 
-    private String generateTransactionReference(PaymentMethod method) {
-        String prefix = method == null ? "PAY" : method.name();
-        return prefix + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+    private String normalizeIdempotencyKey(String key) {
+        return (key == null || key.isBlank()) ? UUID.randomUUID().toString() : key.trim();
     }
 
     private User getCurrentUser() {
-        String email = SecurityUtil.getCurrentUsername();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+        return userRepository.findByEmail(SecurityUtil.getCurrentUsername())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 }

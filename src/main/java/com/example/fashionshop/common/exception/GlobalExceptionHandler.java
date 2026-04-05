@@ -41,6 +41,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
     }
 
+
+    @ExceptionHandler(PaymentCancelledException.class)
+    public ResponseEntity<ApiResponse<Object>> handlePaymentCancelled(PaymentCancelledException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(PaymentGatewayException.class)
+    public ResponseEntity<ApiResponse<Object>> handlePaymentGatewayFailure(PaymentGatewayException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler({
             HomeDataLoadException.class,
             ProductDetailLoadException.class,

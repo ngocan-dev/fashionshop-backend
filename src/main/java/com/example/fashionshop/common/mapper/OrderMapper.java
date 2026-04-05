@@ -49,7 +49,7 @@ public final class OrderMapper {
                         .orderStatus(order.getStatus())
                         .paymentStatus(latestPayment.map(payment -> payment.getPaymentStatus().name())
                                 .orElseGet(() -> invoice.map(invoiceEntity -> invoiceEntity.getPaymentStatus().name())
-                                        .orElse("UNPAID")))
+                                        .orElse("PENDING")))
                         .paymentMethod(latestPayment.map(payment -> payment.getPaymentMethod().name()).orElse(null))
                         .subtotal(subtotal)
                         .shippingFee(ZERO)

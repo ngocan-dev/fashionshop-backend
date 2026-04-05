@@ -33,6 +33,15 @@ public class Payment {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus;
 
+    @Column(name = "gateway_transaction_id", length = 100)
+    private String gatewayTransactionId;
+
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
+    @Column(name = "failure_reason", length = 500)
+    private String failureReason;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
@@ -41,9 +50,6 @@ public class Payment {
 
     @Column(name = "transaction_reference", length = 128)
     private String transactionReference;
-
-    @Column(name = "failure_reason", length = 500)
-    private String failureReason;
 
     @Column(name = "gateway_provider", length = 64)
     private String gatewayProvider;
@@ -57,7 +63,7 @@ public class Payment {
     @PrePersist
     public void prePersist() {
         if (paymentStatus == null) {
-            paymentStatus = PaymentStatus.UNPAID;
+            paymentStatus = PaymentStatus.PENDING;
         }
 
         LocalDateTime now = LocalDateTime.now();
