@@ -6,6 +6,7 @@ import com.example.fashionshop.common.exception.ProductDetailLoadException;
 import com.example.fashionshop.common.exception.ProductListLoadException;
 import com.example.fashionshop.common.exception.ProductUpdateException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
+import com.example.fashionshop.common.exception.SearchResultLoadException;
 import com.example.fashionshop.common.mapper.ProductMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.common.util.SecurityUtil;
@@ -15,13 +16,13 @@ import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageUpdateRequest;
 import com.example.fashionshop.modules.product.dto.ProductRequest;
-import com.example.fashionshop.modules.product.dto.ProductStatus;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
+import com.example.fashionshop.modules.product.dto.ProductSearchResponse;
+import com.example.fashionshop.modules.product.dto.ProductStatus;
 import com.example.fashionshop.modules.product.entity.Product;
 import com.example.fashionshop.modules.product.repository.ProductRepository;
 import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
-
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class ProductServiceImpl implements ProductService {
+
+    private static final int SEARCH_LIMIT = 5;
+    private static final int DESCRIPTION_SNIPPET_MAX_LENGTH = 120;
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -56,6 +60,7 @@ public class ProductServiceImpl implements ProductService {
                 .createdBy(creator)
                 .updatedBy(creator)
                 .build();
+
         return ProductMapper.toResponse(productRepository.save(product));
     }
 
@@ -148,7 +153,6 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-
     @Override
     public PaginationResponse<ProductManageSummaryResponse> getManageProducts(int page, int size, String keyword) {
         if (page < 0 || size <= 0) {
@@ -189,6 +193,56 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
+    @Override
+    public List<ProductSearchResponse> searchProducts(String keyword) {
+        String trimmedKeyword = keyword == null ? "" : keyword.trim();
+        if (trimmedKeyword.isEmpty()) {
+            throw new BadRequestException("Please enter a keyword");
+        }
+
+        try {
+            Page<Product> page = productRepository.searchActiveProductsByKeyword(trimmedKeyword, PageRequest.of(0, SEARCH_LIMIT));
+            return page.getContent().stream().map(this::toSearchResponse).toList();
+        } catch (BadRequestException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SearchResultLoadException();
+        }
+    }
+
+    private ProductSearchResponse toSearchResponse(Product product) {
+        String description = product.getDescription() == null ? "" : product.getDescription().trim();
+        String snippet = description.length() > DESCRIPTION_SNIPPET_MAX_LENGTH
+                ? description.substring(0, DESCRIPTION_SNIPPET_MAX_LENGTH).trim() + "..."
+                : description;
+        boolean inStock = product.getStockQuantity() != null && product.getStockQuantity() > 0;
+
+        return ProductSearchResponse.builder()
+                .id(product.getId())
+                .slug("product-" + product.getId())
+                .name(product.getName())
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .price(product.getPrice())
+                .thumbnailImageUrl(getPrimaryImageUrl(product.getImageUrl()))
+                .descriptionSnippet(snippet)
+                .inStock(inStock)
+                .stockStatus(inStock ? "IN_STOCK" : "OUT_OF_STOCK")
+                .productDetailUrl("/products/" + product.getId())
+                .build();
+    }
+
+    private String getPrimaryImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+
+        return java.util.Arrays.stream(imageUrl.split(","))
+                .map(String::trim)
+                .filter(url -> !url.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
     private User getCurrentUser() {
         String email = SecurityUtil.getCurrentUsername();
         return userRepository.findByEmail(email)
@@ -198,6 +252,8 @@ public class ProductServiceImpl implements ProductService {
     private void deactivateProduct(Product product) {
         product.setIsActive(false);
         productRepository.save(product);
+    }
+
     private String serializeImageUrls(List<String> imageUrls) {
         if (imageUrls == null) {
             return null;
