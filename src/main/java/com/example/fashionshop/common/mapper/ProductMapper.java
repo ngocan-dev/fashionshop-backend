@@ -3,6 +3,7 @@ package com.example.fashionshop.common.mapper;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
 import com.example.fashionshop.modules.product.dto.ProductResponse;
+import com.example.fashionshop.modules.product.dto.StoreProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.StoreProductSummaryResponse;
 import com.example.fashionshop.modules.product.entity.Product;
 
@@ -68,6 +69,44 @@ public final class ProductMapper {
                 .shortDescription(shortDescription)
                 .inStock(product.getStockQuantity() != null && product.getStockQuantity() > 0)
                 .productDetailUrl("/products/" + product.getId())
+                .build();
+    }
+
+
+    public static StoreProductDetailResponse toStoreDetailResponse(Product product) {
+        List<String> imageUrls = parseImageUrls(product.getImageUrl());
+        boolean inStock = product.getStockQuantity() != null && product.getStockQuantity() > 0;
+
+        return StoreProductDetailResponse.builder()
+                .id(product.getId())
+                .slug("product-" + product.getId())
+                .name(product.getName())
+                .description(product.getDescription())
+                .price(product.getPrice())
+                .originalPrice(null)
+                .salePrice(null)
+                .stockQuantity(product.getStockQuantity())
+                .inStock(inStock)
+                .availabilityStatus(inStock ? "IN_STOCK" : "OUT_OF_STOCK")
+                .availabilityLabel(inStock ? "In stock" : "Out of stock")
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .productCode("SKU-" + product.getId())
+                .sku("SKU-" + product.getId())
+                .mainImageUrl(imageUrls.isEmpty() ? null : imageUrls.get(0))
+                .galleryImages(imageUrls)
+                .highlights(Collections.emptyList())
+                .material(null)
+                .sizeOptions(Collections.emptyList())
+                .colorOptions(Collections.emptyList())
+                .dimensions(null)
+                .careInstructions(null)
+                .brand(null)
+                .tags(Collections.emptyList())
+                .defaultQuantity(1)
+                .minQuantity(1)
+                .maxQuantity(inStock ? product.getStockQuantity() : 0)
+                .addToCartEnabled(inStock)
+                .buyNowEnabled(inStock)
                 .build();
     }
 
