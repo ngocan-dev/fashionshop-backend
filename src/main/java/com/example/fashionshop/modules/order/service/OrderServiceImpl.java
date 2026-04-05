@@ -3,6 +3,7 @@ package com.example.fashionshop.modules.order.service;
 import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
+import com.example.fashionshop.common.exception.ForbiddenException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
 import com.example.fashionshop.common.exception.OrderListLoadException;
 import com.example.fashionshop.common.exception.OrderStatusUpdateException;
@@ -125,19 +126,23 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderResponse> getMyOrders() {
         User user = getCurrentUser();
-        return orderRepository.findByUser(user).stream()
+        return orderRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order)))
                 .toList();
     }
 
     @Override
     public OrderDetailResponse getMyOrderDetail(Integer orderId) {
-        User user = getCurrentUser();
-        Order order = getOrderOrThrow(orderId);
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You are not allowed to access this order");
+        try {
+            User user = getCurrentUser();
+            Order order = orderRepository.findByIdAndUserId(orderId, user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+            return buildOrderDetailResponse(order);
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderDetailLoadException(ex);
         }
-        return buildOrderDetailResponse(order);
     }
 
     @Override
@@ -146,7 +151,7 @@ public class OrderServiceImpl implements OrderService {
         User user = getCurrentUser();
         Order order = getOrderOrThrow(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("You are not allowed to cancel this order");
+            throw new ForbiddenException("You are not allowed to cancel this order");
         }
         if (EnumSet.of(OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED).contains(order.getStatus())) {
             throw new BadRequestException("Cannot cancel this order in current status");
