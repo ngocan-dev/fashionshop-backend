@@ -23,7 +23,6 @@ public interface OrderService {
 
     PaginationResponse<OrderSummaryResponse> getManageOrderSummaries(OrderListQuery query);
 
-    OrderResponse getOrderDetail(Integer orderId);
     OrderDetailResponse getOrderDetail(Integer orderId);
 
     OrderResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request);

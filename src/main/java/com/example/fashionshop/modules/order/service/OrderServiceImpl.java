@@ -15,7 +15,6 @@ import com.example.fashionshop.modules.cart.repository.CartItemRepository;
 import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
-import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
@@ -181,7 +180,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponse getOrderDetail(Integer orderId) {
     public OrderDetailResponse getOrderDetail(Integer orderId) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return buildOrderDetailResponse(order);

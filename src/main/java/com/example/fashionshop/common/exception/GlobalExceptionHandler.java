@@ -1,13 +1,12 @@
 package com.example.fashionshop.common.exception;
 
 import com.example.fashionshop.common.response.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-
-import jakarta.validation.ConstraintViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -27,12 +26,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({UnauthorizedException.class})
+    @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Object>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({ForbiddenException.class})
+    @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
     }
@@ -59,13 +58,29 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OrderListLoadException.class)
     public ResponseEntity<ApiResponse<Object>> handleOrderListLoad(OrderListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
 
     @ExceptionHandler(OrderDetailLoadException.class)
     public ResponseEntity<ApiResponse<Object>> handleOrderDetailLoad(OrderDetailLoadException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
+
+    @ExceptionHandler(InvoiceListLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceListLoad(InvoiceListLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvoiceDetailLoadException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInvoiceDetailLoad(InvoiceDetailLoadException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ProductDeletionException.class)
     public ResponseEntity<ApiResponse<Object>> handleProductDeletionFailure(ProductDeletionException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ProductUpdateException.class)
     public ResponseEntity<ApiResponse<Object>> handleProductUpdate(ProductUpdateException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
@@ -101,10 +116,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
-
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid order id"));
+        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request parameter"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
