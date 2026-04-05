@@ -4,11 +4,15 @@ import com.example.fashionshop.common.response.ApiResponse;
 import com.example.fashionshop.common.response.PaginationResponse;
 import com.example.fashionshop.modules.product.dto.ProductDetailResponse;
 import com.example.fashionshop.modules.product.dto.ProductManageSummaryResponse;
+import com.example.fashionshop.modules.product.dto.ProductManageUpdateRequest;
 import com.example.fashionshop.modules.product.service.ProductService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,5 +39,12 @@ public class AdminProductController {
     @GetMapping("/{id}")
     public ApiResponse<ProductDetailResponse> getProductDetail(@PathVariable Integer id) {
         return ApiResponse.success("Product detail fetched successfully", productService.getManageDetail(id));
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<ProductDetailResponse> updateProduct(
+            @PathVariable Integer id,
+            @Valid @RequestBody ProductManageUpdateRequest request) {
+        return ApiResponse.success("Product updated successfully", productService.updateManageProduct(id, request));
     }
 }
