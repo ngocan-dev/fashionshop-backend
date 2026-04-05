@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -88,6 +89,46 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Invalid order id"));
+    }
+
+    @Test
+    void cancelOrder_shouldCancelOrderForStaffAdmin() throws Exception {
+        CancelOrderResponse response = CancelOrderResponse.builder()
+                .orderId(1001)
+                .status(OrderStatus.CANCELLED)
+                .cancellationReason("Payment verification failed")
+                .updatedAt(LocalDateTime.of(2026, 4, 5, 14, 0))
+                .build();
+
+        when(orderService.cancelOrder(org.mockito.ArgumentMatchers.eq(1001), org.mockito.ArgumentMatchers.any(CancelOrderRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/orders/manage/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "Payment verification failed"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Order cancelled successfully"))
+                .andExpect(jsonPath("$.data.orderId").value(1001))
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
+    @Test
+    void cancelOrder_shouldValidateReason() throws Exception {
+        mockMvc.perform(patch("/api/orders/manage/1001/cancel")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": " "
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Please fill in all required fields"));
     }
 
     private OrderDetailResponse buildOrderDetailResponse() {

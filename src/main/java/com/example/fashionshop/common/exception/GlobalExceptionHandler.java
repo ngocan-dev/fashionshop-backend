@@ -1,13 +1,12 @@
 package com.example.fashionshop.common.exception;
 
 import com.example.fashionshop.common.response.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-
-import jakarta.validation.ConstraintViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -27,52 +26,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({UnauthorizedException.class})
+    @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Object>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler({ForbiddenException.class})
-    public ResponseEntity<ApiResponse<Object>> handleForbidden(ForbiddenException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
+    @ExceptionHandler({ForbiddenException.class, AccessDeniedException.class})
+    public ResponseEntity<ApiResponse<Object>> handleForbidden(Exception ex) {
+        String message = ex instanceof AccessDeniedException ? "Access denied" : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(message));
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
-    }
-
-    @ExceptionHandler(HomeDataLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHomeDataLoad(HomeDataLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductDetailLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductDetailLoad(ProductDetailLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(ProductListLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductListLoad(ProductListLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(OrderListLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleOrderListLoad(OrderListLoadException ex) {
-
-    @ExceptionHandler(OrderDetailLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleOrderDetailLoad(OrderDetailLoadException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-    @ExceptionHandler(ProductDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductDeletionFailure(ProductDeletionException ex) {
-    @ExceptionHandler(ProductUpdateException.class)
-    public ResponseEntity<ApiResponse<Object>> handleProductUpdate(ProductUpdateException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(DashboardLoadException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDashboardLoad(DashboardLoadException ex) {
+    @ExceptionHandler({HomeDataLoadException.class, ProductDetailLoadException.class, ProductListLoadException.class,
+            OrderListLoadException.class, OrderDetailLoadException.class, ProductDeletionException.class,
+            ProductUpdateException.class, DashboardLoadException.class, AccountDeletionException.class,
+            CustomerAccountRetrievalException.class, AuthenticationSystemException.class, OrderCancellationException.class})
+    public ResponseEntity<ApiResponse<Object>> handleInternalFailure(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -81,26 +50,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
     }
 
-    @ExceptionHandler(AccountDeletionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccountDeletionFailure(AccountDeletionException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
-    @ExceptionHandler(CustomerAccountRetrievalException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCustomerAccountRetrieval(CustomerAccountRetrievalException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
     @ExceptionHandler(AccountCreationException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccountCreation(AccountCreationException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
     }
-
-    @ExceptionHandler(AuthenticationSystemException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAuthenticationSystem(AuthenticationSystemException ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(ex.getMessage()));
-    }
-
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
@@ -113,7 +66,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
-            if ("NotBlank".equals(error.getCode())) {
+            if ("NotBlank".equals(error.getCode()) || "NotNull".equals(error.getCode())) {
                 hasMissingRequiredField = true;
             }
         }

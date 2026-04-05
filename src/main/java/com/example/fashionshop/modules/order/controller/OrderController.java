@@ -8,6 +8,8 @@ import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -82,5 +84,12 @@ public class OrderController {
     public ApiResponse<OrderResponse> updateStatus(@PathVariable @Positive Integer orderId,
                                                    @Valid @RequestBody UpdateOrderStatusRequest request) {
         return ApiResponse.success("Order status updated successfully", orderService.updateOrderStatus(orderId, request));
+    }
+
+    @PatchMapping("/manage/{orderId}/cancel")
+    @PreAuthorize("hasAnyRole('STAFF','ADMIN')")
+    public ApiResponse<CancelOrderResponse> cancelOrder(@PathVariable @Positive Integer orderId,
+                                                        @Valid @RequestBody CancelOrderRequest request) {
+        return ApiResponse.success("Order cancelled successfully", orderService.cancelOrder(orderId, request));
     }
 }

@@ -7,6 +7,8 @@ import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 
 import java.util.List;
 
@@ -23,8 +25,9 @@ public interface OrderService {
 
     PaginationResponse<OrderSummaryResponse> getManageOrderSummaries(OrderListQuery query);
 
-    OrderResponse getOrderDetail(Integer orderId);
     OrderDetailResponse getOrderDetail(Integer orderId);
 
     OrderResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request);
+
+    CancelOrderResponse cancelOrder(Integer orderId, CancelOrderRequest request);
 }

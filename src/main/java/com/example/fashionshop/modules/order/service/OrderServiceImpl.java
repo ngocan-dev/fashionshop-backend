@@ -3,8 +3,9 @@ package com.example.fashionshop.modules.order.service;
 import com.example.fashionshop.common.enums.OrderStatus;
 import com.example.fashionshop.common.enums.PaymentStatus;
 import com.example.fashionshop.common.exception.BadRequestException;
-import com.example.fashionshop.common.exception.OrderListLoadException;
+import com.example.fashionshop.common.exception.OrderCancellationException;
 import com.example.fashionshop.common.exception.OrderDetailLoadException;
+import com.example.fashionshop.common.exception.OrderListLoadException;
 import com.example.fashionshop.common.exception.ResourceNotFoundException;
 import com.example.fashionshop.common.mapper.OrderMapper;
 import com.example.fashionshop.common.response.PaginationResponse;
@@ -15,10 +16,11 @@ import com.example.fashionshop.modules.cart.repository.CartItemRepository;
 import com.example.fashionshop.modules.cart.repository.CartRepository;
 import com.example.fashionshop.modules.invoice.entity.Invoice;
 import com.example.fashionshop.modules.invoice.repository.InvoiceRepository;
-import com.example.fashionshop.modules.payment.repository.PaymentRepository;
 import com.example.fashionshop.modules.notification.service.NotificationService;
-import com.example.fashionshop.modules.order.dto.OrderListQuery;
+import com.example.fashionshop.modules.order.dto.CancelOrderRequest;
+import com.example.fashionshop.modules.order.dto.CancelOrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
+import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
@@ -126,7 +128,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderDetailResponse getMyOrderDetail(Integer orderId) {
         User user = getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to access this order");
         }
@@ -137,7 +139,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void cancelMyOrder(Integer orderId) {
         User user = getCurrentUser();
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("You are not allowed to cancel this order");
         }
@@ -181,15 +183,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponse getOrderDetail(Integer orderId) {
     public OrderDetailResponse getOrderDetail(Integer orderId) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         return buildOrderDetailResponse(order);
     }
 
     @Override
+    @Transactional
     public OrderResponse updateOrderStatus(Integer orderId, UpdateOrderStatusRequest request) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        Order order = getOrderOrThrow(orderId);
         validateTransition(order.getStatus(), request.getStatus());
         order.setStatus(request.getStatus());
         order.setManagedBy(getCurrentUser());
@@ -197,6 +199,37 @@ public class OrderServiceImpl implements OrderService {
         return OrderMapper.toResponse(saved, orderItemRepository.findByOrder(saved));
     }
 
+    @Override
+    @Transactional
+    public CancelOrderResponse cancelOrder(Integer orderId, CancelOrderRequest request) {
+        Order order = getOrderOrThrow(orderId);
+
+        if (!isCancellableByStaff(order.getStatus())) {
+            throw new BadRequestException("Order cannot be cancelled");
+        }
+
+        try {
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setCancellationReason(request.getReason().trim());
+            order.setManagedBy(getCurrentUser());
+            Order savedOrder = orderRepository.save(order);
+
+            return CancelOrderResponse.builder()
+                    .orderId(savedOrder.getId())
+                    .status(savedOrder.getStatus())
+                    .cancellationReason(savedOrder.getCancellationReason())
+                    .updatedAt(savedOrder.getUpdatedAt())
+                    .build();
+        } catch (BadRequestException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderCancellationException();
+        }
+    }
+
+    private boolean isCancellableByStaff(OrderStatus status) {
+        return status != OrderStatus.COMPLETED && status != OrderStatus.CANCELLED;
+    }
 
     private OrderDetailResponse buildOrderDetailResponse(Order order) {
         try {
@@ -258,14 +291,15 @@ public class OrderServiceImpl implements OrderService {
 
         return OrderSummaryResponse.builder()
                 .id(order.getId())
+                .orderId(order.getId())
                 .orderCode(invoice != null ? invoice.getInvoiceNumber() : "ORD-" + order.getId())
                 .customerName(order.getUser() != null ? order.getUser().getFullName() : order.getReceiverName())
                 .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
                 .customerPhone(order.getPhone())
                 .orderDate(order.getCreatedAt())
                 .orderStatus(order.getStatus())
-                .paymentStatus(payment != null ? payment.getPaymentStatus() : PaymentStatus.UNPAID)
-                .paymentMethod(payment != null ? payment.getPaymentMethod() : null)
+                .paymentStatus(payment != null ? payment.getPaymentStatus().name() : PaymentStatus.UNPAID.name())
+                .paymentMethod(payment != null && payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
                 .totalAmount(order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO)
                 .itemCount(items.size())
                 .shippingStatus(formatShippingStatus(order.getStatus()))
@@ -283,6 +317,10 @@ public class OrderServiceImpl implements OrderService {
             case COMPLETED -> "DELIVERED";
             case CANCELLED -> "CANCELLED";
         };
+    }
+
+    private Order getOrderOrThrow(Integer orderId) {
+        return orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
     }
 
     private User getCurrentUser() {

@@ -11,5 +11,6 @@ public class OrderAdditionalInfoResponse {
     private String customerNote;
     private String deliveryMethod;
     private String internalNote;
+    private String cancellationReason;
     private LocalDateTime lastUpdatedAt;
 }

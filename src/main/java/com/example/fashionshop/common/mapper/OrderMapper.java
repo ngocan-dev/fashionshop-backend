@@ -26,6 +26,7 @@ public final class OrderMapper {
                 .receiverName(order.getReceiverName())
                 .phone(order.getPhone())
                 .shippingAddress(order.getShippingAddress())
+                .cancellationReason(order.getCancellationReason())
                 .createdAt(order.getCreatedAt())
                 .items(items.stream().map(OrderMapper::toItemResponse).toList())
                 .build();
@@ -64,6 +65,7 @@ public final class OrderMapper {
                         .customerNote(null)
                         .deliveryMethod(null)
                         .internalNote(invoice.map(Invoice::getNote).orElse(null))
+                        .cancellationReason(order.getCancellationReason())
                         .lastUpdatedAt(resolveLastUpdated(order, latestPayment))
                         .build())
                 .build();
@@ -105,6 +107,8 @@ public final class OrderMapper {
     }
 
     private static LocalDateTime resolveLastUpdated(Order order, Optional<Payment> latestPayment) {
-        return latestPayment.map(Payment::getPaidAt).orElse(order.getCreatedAt());
+        return order.getUpdatedAt() != null
+                ? order.getUpdatedAt()
+                : latestPayment.map(Payment::getPaidAt).orElse(order.getCreatedAt());
     }
 }
