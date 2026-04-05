@@ -239,6 +239,44 @@ Example response highlights:
   - Empty cart state: `empty: true` (frontend shows `Your cart is empty`)
   - Retrieval failure: message `Unable to load cart items`
 
+## Customer View Order History (UC-33)
+- **Endpoint:** `GET /api/orders/my/history`
+- **Role:** `CUSTOMER`
+- **Purpose:** Return a paginated order-history list for the currently authenticated customer only.
+- **Auth/ownership rules:**
+  - Requires valid customer JWT/session.
+  - The API always filters by current authenticated customer and never exposes other customers' orders.
+- **Query params (optional):**
+  - `page` (default: `0`)
+  - `size` (default: `10`, max: `50`)
+  - `status` (`PENDING`, `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `COMPLETED`, `CANCELLED`)
+  - `sortBy` (`id`, `status`, `totalPrice`, `createdAt`, `updatedAt`)
+  - `sortDir` (`asc`, `desc`)
+- **History row fields (`data.items[]`):**
+  - `orderId`
+  - `orderCode` (invoice/order reference when available)
+  - `orderDate`
+  - `totalAmount`
+  - `orderStatus`
+  - plus optional enrichments: `paymentStatus`, `paymentMethod`, `itemCount`, `shippingStatus`, `updatedAt`
+- **Typical responses:**
+  - Success with data: message `Order history fetched successfully`
+  - Empty list: message `No order history available`
+  - Retrieval failure: message `Unable to load order history`
+
+Example customer account navigation wiring (frontend):
+```text
+Account Menu
+├── Profile         -> /account/profile
+├── Order History   -> /account/orders
+└── Wishlist        -> /account/wishlist
+
+Order History Page (/account/orders)
+└── Calls GET /api/orders/my/history?page=0&size=10
+    └── Clicking one row navigates to /account/orders/:orderId
+        └── Detail API: GET /api/orders/my/{orderId}
+```
+
 Example storefront integration wiring (frontend):
 ```text
 Storefront Header

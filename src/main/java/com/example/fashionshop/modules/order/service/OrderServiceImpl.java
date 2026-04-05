@@ -22,6 +22,7 @@ import com.example.fashionshop.modules.notification.service.NotificationService;
 import com.example.fashionshop.modules.order.dto.CheckoutSummaryItemResponse;
 import com.example.fashionshop.modules.order.dto.CheckoutSummaryResponse;
 import com.example.fashionshop.modules.order.dto.OrderDetailResponse;
+import com.example.fashionshop.modules.order.dto.CustomerOrderHistoryQuery;
 import com.example.fashionshop.modules.order.dto.OrderListQuery;
 import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
@@ -40,6 +41,7 @@ import com.example.fashionshop.modules.user.entity.User;
 import com.example.fashionshop.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -238,6 +240,32 @@ public class OrderServiceImpl implements OrderService {
                 .map(order -> OrderMapper.toResponse(order, orderItemRepository.findByOrder(order),
                         paymentRepository.findTopByOrderOrderByIdDesc(order)))
                 .toList();
+    }
+
+    @Override
+    public PaginationResponse<OrderSummaryResponse> getMyOrderHistory(CustomerOrderHistoryQuery query) {
+        User user = getCurrentUser();
+        try {
+            Pageable pageable = PageRequest.of(query.getPage(), query.getSize(),
+                    resolveSort(query.getSortBy(), query.getSortDir()));
+
+            Page<Order> orderPage = orderRepository.findAll(buildCustomerOrderHistorySpecification(user, query), pageable);
+            List<OrderSummaryResponse> items = orderPage.getContent().stream()
+                    .map(this::toOrderSummaryResponse)
+                    .toList();
+
+            return PaginationResponse.<OrderSummaryResponse>builder()
+                    .items(items)
+                    .page(orderPage.getNumber())
+                    .size(orderPage.getSize())
+                    .totalItems(orderPage.getTotalElements())
+                    .totalPages(orderPage.getTotalPages())
+                    .build();
+        } catch (OrderListLoadException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new OrderListLoadException("Unable to load order history");
+        }
     }
 
     @Override
@@ -455,6 +483,18 @@ public class OrderServiceImpl implements OrderService {
                                 criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("email")), keyword)
                         )
                 );
+            }
+            return predicates;
+        };
+    }
+
+    private Specification<Order> buildCustomerOrderHistorySpecification(User user, CustomerOrderHistoryQuery query) {
+        return (root, criteriaQuery, criteriaBuilder) -> {
+            var predicates = criteriaBuilder.conjunction();
+            predicates.getExpressions().add(criteriaBuilder.equal(root.get("user").get("id"), user.getId()));
+
+            if (query.getStatus() != null) {
+                predicates.getExpressions().add(criteriaBuilder.equal(root.get("status"), query.getStatus()));
             }
             return predicates;
         };
