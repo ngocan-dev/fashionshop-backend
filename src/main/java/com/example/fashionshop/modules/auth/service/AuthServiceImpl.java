@@ -1,6 +1,7 @@
 package com.example.fashionshop.modules.auth.service;
 
 import com.example.fashionshop.common.enums.Role;
+import com.example.fashionshop.common.exception.AuthenticationSystemException;
 import com.example.fashionshop.common.exception.BadRequestException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
@@ -11,6 +12,7 @@ import com.example.fashionshop.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -54,20 +56,26 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("Invalid credentials"));
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(user.getId())
-                .fullName(user.getFullName())
-                .email(user.getEmail())
-                .role(user.getRole())
-                .build();
+            UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+            return AuthResponse.builder()
+                    .token(jwtService.generateToken(userDetails))
+                    .userId(user.getId())
+                    .fullName(user.getFullName())
+                    .email(user.getEmail())
+                    .role(user.getRole())
+                    .build();
+        } catch (AuthenticationException ex) {
+            throw new BadRequestException("Invalid email or password");
+        } catch (Exception ex) {
+            throw new AuthenticationSystemException("Login failed, please try again later");
+        }
     }
 }
