@@ -12,6 +12,7 @@ import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
+import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 import com.example.fashionshop.modules.order.service.OrderService;
@@ -46,6 +47,16 @@ public class OrderController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<OrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         return ApiResponse.success("Order placed successfully", orderService.placeOrder(request));
+    }
+
+    @PatchMapping("/checkout/payment-method")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResponse<CheckoutSummaryResponse> updateCheckoutPaymentMethod(
+            @Valid @RequestBody UpdateCheckoutPaymentMethodRequest request) {
+        return ApiResponse.success(
+                "Payment method selected successfully",
+                orderService.updateCheckoutPaymentMethod(request)
+        );
     }
 
     @GetMapping

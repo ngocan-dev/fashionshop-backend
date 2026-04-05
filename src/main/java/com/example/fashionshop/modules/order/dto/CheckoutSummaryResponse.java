@@ -17,6 +17,7 @@ public class CheckoutSummaryResponse {
     private String customerPhone;
     private String suggestedShippingAddress;
     private List<PaymentMethod> availablePaymentMethods;
+    private PaymentMethod selectedPaymentMethod;
     private List<CheckoutSummaryItemResponse> items;
     private Integer totalItems;
     private Integer distinctItemCount;

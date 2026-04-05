@@ -11,6 +11,7 @@ import com.example.fashionshop.modules.order.dto.OrderResponse;
 import com.example.fashionshop.modules.order.dto.OrderSummaryResponse;
 import com.example.fashionshop.modules.order.dto.OrderStatusTrackingResponse;
 import com.example.fashionshop.modules.order.dto.PlaceOrderRequest;
+import com.example.fashionshop.modules.order.dto.UpdateCheckoutPaymentMethodRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusRequest;
 import com.example.fashionshop.modules.order.dto.UpdateOrderStatusResponse;
 
@@ -18,6 +19,8 @@ import java.util.List;
 
 public interface OrderService {
     CheckoutSummaryResponse getCheckoutSummary();
+
+    CheckoutSummaryResponse updateCheckoutPaymentMethod(UpdateCheckoutPaymentMethodRequest request);
 
     OrderResponse placeOrder(PlaceOrderRequest request);
 
