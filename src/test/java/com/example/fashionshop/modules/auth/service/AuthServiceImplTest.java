@@ -26,7 +26,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -151,5 +154,36 @@ class AuthServiceImplTest {
                 () -> authService.login(request));
 
         assertEquals("Login failed, please try again later", exception.getMessage());
+    }
+
+    @Test
+    void logoutShouldDoNothingWhenAuthorizationHeaderMissing() {
+        assertDoesNotThrow(() -> authService.logout(null));
+        verify(tokenBlacklistService, never()).blacklistToken(any(), any());
+    }
+
+    @Test
+    void logoutShouldBlacklistTokenWhenBearerTokenIsValid() {
+        String token = "jwt-token";
+        String authHeader = "Bearer " + token;
+
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
+        when(jwtService.extractExpiration(token)).thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000));
+
+        assertDoesNotThrow(() -> authService.logout(authHeader));
+
+        verify(tokenBlacklistService).blacklistToken(eq(token), any());
+    }
+
+    @Test
+    void logoutShouldIgnoreInvalidBearerToken() {
+        String token = "invalid-token";
+        String authHeader = "Bearer " + token;
+
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
+        when(jwtService.extractExpiration(token)).thenThrow(new RuntimeException("invalid token"));
+
+        assertDoesNotThrow(() -> authService.logout(authHeader));
+        verify(tokenBlacklistService, never()).blacklistToken(any(), any());
     }
 }

@@ -135,7 +135,7 @@ Response envelope:
 |---|---|---|---|---|
 | POST | `/api/auth/register` | Public | `RegisterRequest` (`email`, `password`, `verifiedPassword`, optional `fullName`) | `AuthResponse` |
 | POST | `/api/auth/login` | Public | `LoginRequest` (`email`, `password`) | `AuthResponse` |
-| POST | `/api/auth/logout` | Bearer token | none | `null` |
+| POST | `/api/auth/logout` | Public (optional Bearer token) | none | `null` |
 
 ### User & account APIs
 | Method | Path | Auth | Purpose |
