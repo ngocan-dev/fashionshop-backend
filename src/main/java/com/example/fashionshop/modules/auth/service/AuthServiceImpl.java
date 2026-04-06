@@ -4,7 +4,6 @@ import com.example.fashionshop.common.enums.Role;
 import com.example.fashionshop.common.exception.AccountCreationException;
 import com.example.fashionshop.common.exception.AuthenticationSystemException;
 import com.example.fashionshop.common.exception.BadRequestException;
-import com.example.fashionshop.common.exception.UnauthorizedException;
 import com.example.fashionshop.modules.auth.dto.AuthResponse;
 import com.example.fashionshop.modules.auth.dto.LoginRequest;
 import com.example.fashionshop.modules.auth.dto.RegisterRequest;
@@ -92,18 +91,18 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void logout(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new UnauthorizedException("Session already expired");
+            return;
         }
 
         String token = authHeader.substring(7);
-        if (tokenBlacklistService.isBlacklisted(token)) {
-            throw new UnauthorizedException("Session already expired");
+        if (token.isBlank() || tokenBlacklistService.isBlacklisted(token)) {
+            return;
         }
 
         try {
             tokenBlacklistService.blacklistToken(token, jwtService.extractExpiration(token));
         } catch (Exception ex) {
-            throw new UnauthorizedException("Session already expired");
+            // Keep logout idempotent for JWT-based auth.
         }
     }
 
